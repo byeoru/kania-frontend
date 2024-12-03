@@ -9,6 +9,7 @@
     onWheel,
   } from "../lib/world/eventHandler";
   import { mapInteraction } from "../lib/world/mapInteraction";
+  import { worldMetadata } from "../lib/world/worldMetadata";
 
   let mapContainer: HTMLDivElement | null = $state(null);
   let mapElement: SVGSVGElement;
@@ -18,6 +19,8 @@
     if (!mapNode) {
       return;
     }
+    worldMetadata.loadMetadata();
+
     mapElement = mapNode;
     mapElement.addEventListener("mousedown", onMouseDown);
     mapElement.addEventListener("wheel", (event) =>
@@ -59,6 +62,7 @@
   };
 
   const mapPs = loadMap("/src/assets/map/kania.svg");
+  const metaData = worldMetadata.loadMetadata();
 </script>
 
 {#await mapPs then map}
