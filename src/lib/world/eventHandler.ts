@@ -115,3 +115,9 @@ export function onMouseUp(map: SVGSVGElement) {
   }
   mapInteraction.isDragging = false;
 }
+
+export function onMouseLeave() {
+  mapInteraction.isDragging = false;
+}
+
+export function onMouseMoveForMetadata(event: MouseEvent) {}

@@ -3,6 +3,7 @@
   import RegionInfo from "../lib/world/components/RegionInfo.svelte";
   import {
     onMouseDown,
+    onMouseLeave,
     onMouseMove,
     onMouseUp,
     onWheel,
@@ -66,6 +67,7 @@
     class="hole_screen"
     onmousemove={(event) => onMouseMove(event, mapContainer!!, mapElement)}
     onmouseup={() => onMouseUp(mapElement)}
+    onmouseleave={onMouseLeave}
   >
     <MyInfo />
     <div class="map_container" bind:this={mapContainer}>
