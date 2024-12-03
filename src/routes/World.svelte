@@ -7,7 +7,7 @@
     onMouseUp,
     onWheel,
   } from "../lib/world/eventHandler";
-  import { mapController } from "../lib/world/mapController";
+  import { mapInteraction } from "../lib/world/mapInteraction";
 
   let mapContainer: HTMLDivElement | null = $state(null);
   let mapElement: SVGSVGElement;
@@ -28,7 +28,7 @@
     const mapRect = mapElement.getBoundingClientRect();
 
     const { elementDeltaMaxX, elementDeltaMaxY } =
-      mapController.getElementMaxDelta(containerRect, mapRect);
+      mapInteraction.getElementMaxDelta(containerRect, mapRect);
 
     if (elementDeltaMaxX > 0 || elementDeltaMaxY > 0) {
       // 새로 조정할 스케일 계산 (너비와 높이를 각각 비교)
@@ -36,11 +36,11 @@
       const heightScale = containerRect.height / mapRect.height;
 
       // 최종 스케일로 업데이트 (너비와 높이 중 큰 쪽을 선택) + 여유 scale 추가
-      mapController.minScale = Math.max(widthScale, heightScale) + 0.05;
-      mapController.scale = mapController.minScale;
+      mapInteraction.minScale = Math.max(widthScale, heightScale) + 0.05;
+      mapInteraction.scale = mapInteraction.minScale;
 
       // 배율 적용
-      mapElement.style.transform = `scale(${mapController.minScale})`;
+      mapElement.style.transform = `scale(${mapInteraction.minScale})`;
     }
 
     return () => {

@@ -1,4 +1,4 @@
-export const mapController = {
+export const mapInteraction = {
   minScale: 1, // 최소 배율
   scale: 1, // 확대/축소 배율
   translateY: 0, // Y축 이동
