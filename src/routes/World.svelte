@@ -35,17 +35,12 @@
       const widthScale = containerRect.width / mapRect.width;
       const heightScale = containerRect.height / mapRect.height;
 
-      // 최종 스케일로 업데이트 (너비와 높이 중 큰 쪽을 선택)
-      mapController.minScale = Math.max(widthScale, heightScale);
+      // 최종 스케일로 업데이트 (너비와 높이 중 큰 쪽을 선택) + 여유 scale 추가
+      mapController.minScale = Math.max(widthScale, heightScale) + 0.05;
       mapController.scale = mapController.minScale;
 
-      // 트랜스폼 적용
+      // 배율 적용
       mapElement.style.transform = `scale(${mapController.minScale})`;
-
-      const { elementDeltaMinX, elementDeltaMinY } =
-        mapController.getElementMinDelta(containerRect, mapRect);
-
-      mapElement.style.transform = `translate(${elementDeltaMinX * mapController.scale}px, ${elementDeltaMinY * mapController.scale}px)`;
     }
 
     return () => {
