@@ -1,4 +1,9 @@
+import { pack } from "d3";
+import type { CurrentCellInfoType } from "../../dataTypes/currentCellInfoType";
+import { getLocalSvgCoordinates } from "../../utils";
 import { mapInteraction } from "./mapInteraction";
+import { worldMetadata } from "./worldMetadata";
+import type { FeatureClass } from "../../dataTypes/packCellsType";
 
 export function onWheel(
   event: WheelEvent,
@@ -120,4 +125,24 @@ export function onMouseLeave() {
   mapInteraction.isDragging = false;
 }
 
-export function onMouseMoveForMetadata(event: MouseEvent) {}
+export function onMouseMoveMetadata(
+  event: MouseEvent,
+  map: SVGSVGElement,
+  updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
+) {
+  const { x, y } = getLocalSvgCoordinates(event, map);
+  const i = worldMetadata.findCell(x, y); // pack cell id
+  if (!i) {
+    return;
+  }
+  const feature = worldMetadata.pack?.cells.features[
+    worldMetadata.pack.cells.cells.f[i]
+  ] as FeatureClass;
+  const newInfo: CurrentCellInfoType = {
+    x,
+    y,
+    i,
+    type: feature.type,
+  };
+  updateCellInfoFn(newInfo);
+}

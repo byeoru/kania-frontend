@@ -1,3 +1,5 @@
+import type { Quadtree } from "d3";
+
 export interface PackCellsType {
   readonly info: Info;
   readonly cells: Cells;
@@ -119,7 +121,7 @@ export interface CellsCells {
   readonly i: { [key: string]: number };
   readonly p: Array<number[]>;
   readonly g: { [key: string]: number };
-  readonly q: Q;
+  q: Quadtree<number[]>;
   readonly h: { [key: string]: number };
   readonly area: { [key: string]: number };
   readonly f: { [key: string]: number };
@@ -139,16 +141,6 @@ export interface CellsCells {
   readonly religion: { [key: string]: number };
   readonly province: { [key: string]: number };
 }
-
-export interface Q {
-  readonly _x0: number;
-  readonly _y0: number;
-  readonly _x1: number;
-  readonly _y1: number;
-  readonly _root: ((QRoot[] | null)[] | null)[];
-}
-
-export type QRoot = PurpleRoot[] | RootClass | null;
 
 export type PurpleRoot = FluffyRoot[] | RootClass | null;
 

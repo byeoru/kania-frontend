@@ -1,10 +1,13 @@
 <script lang="ts">
+  import type { CurrentCellInfoType } from "../dataTypes/currentCellInfoType";
+  import Loading from "../lib/Loading.svelte";
   import MyInfo from "../lib/world/components/MyInfo.svelte";
   import RegionInfo from "../lib/world/components/RegionInfo.svelte";
   import {
     onMouseDown,
     onMouseLeave,
     onMouseMove,
+    onMouseMoveMetadata,
     onMouseUp,
     onWheel,
   } from "../lib/world/eventHandler";
@@ -14,21 +17,22 @@
   let mapContainer: HTMLDivElement | null = $state(null);
   let mapElement: SVGSVGElement;
 
+  let currentCellInfo = $state<CurrentCellInfoType>();
+
   $effect(() => {
     const mapNode = mapContainer?.querySelector("svg");
     if (!mapNode) {
       return;
     }
-    worldMetadata.loadMetadata();
 
     mapElement = mapNode;
     mapElement.addEventListener("mousedown", onMouseDown);
     mapElement.addEventListener("wheel", (event) =>
-      onWheel(event, mapContainer!!, mapElement),
+      onWheel(event, mapContainer!, mapElement),
     );
 
     // 초기 map scale value setting
-    const containerRect = mapContainer!!.getBoundingClientRect();
+    const containerRect = mapContainer!.getBoundingClientRect();
     const mapRect = mapElement.getBoundingClientRect();
 
     const { elementDeltaMaxX, elementDeltaMaxY } =
@@ -50,10 +54,14 @@
     return () => {
       mapElement.removeEventListener("mousedown", onMouseDown);
       mapElement.removeEventListener("wheel", (event) =>
-        onWheel(event, mapContainer!!, mapElement),
+        onWheel(event, mapContainer!, mapElement),
       );
     };
   });
+
+  const updateCurrentCellInfo = (newInfo: CurrentCellInfoType) => {
+    currentCellInfo = newInfo;
+  };
 
   const loadMap = async (path: string) => {
     const res = await fetch(path);
@@ -61,20 +69,31 @@
     return svgContent;
   };
 
-  const mapPs = loadMap("/src/assets/map/kania.svg");
-  const metaData = worldMetadata.loadMetadata();
+  const mapInit = async () => {
+    await worldMetadata.loadMetadata();
+    worldMetadata.createQuadtree();
+
+    return loadMap("/src/assets/map/kania.svg");
+  };
 </script>
 
-{#await mapPs then map}
+{#await mapInit()}
+  <Loading description="데이터를 불러오는 중입니다" />
+{:then map}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="hole_screen"
-    onmousemove={(event) => onMouseMove(event, mapContainer!!, mapElement)}
+    onmousemove={(event) => onMouseMove(event, mapContainer!, mapElement)}
     onmouseup={() => onMouseUp(mapElement)}
     onmouseleave={onMouseLeave}
   >
-    <MyInfo />
-    <div class="map_container" bind:this={mapContainer}>
+    <MyInfo cellInfo={currentCellInfo} />
+    <div
+      class="map_container"
+      bind:this={mapContainer}
+      onmousemove={(event) =>
+        onMouseMoveMetadata(event, mapElement, updateCurrentCellInfo)}
+    >
       {@html map}
     </div>
     <RegionInfo />

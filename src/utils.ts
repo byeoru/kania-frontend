@@ -1,12 +1,10 @@
-import { zoomTransform } from "d3-zoom";
-import { select } from "d3-selection";
+// SVG local 좌표 변환 함수
+export function getLocalSvgCoordinates(event: MouseEvent, svg: SVGSVGElement) {
+  const point = svg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
 
-export function getSVGCoords(svgElement: SVGSVGElement, x: number, y: number) {
-  const svg = select(svgElement);
-  const transform = zoomTransform(svg.node() as any);
-
-  return {
-    x: (x - transform.x) / transform.k,
-    y: (y - transform.y) / transform.k,
-  };
+  // 화면 좌표를 SVG 좌표로 변환
+  const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
+  return svgPoint;
 }

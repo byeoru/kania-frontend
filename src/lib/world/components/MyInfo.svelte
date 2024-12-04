@@ -1,4 +1,12 @@
-<div class="info">My Info</div>
+<script lang="ts">
+  const { cellInfo } = $props();
+</script>
+
+{#if cellInfo}
+  <div class="info">
+    {`x: ${cellInfo.x}, y: ${cellInfo.y}, idx: ${cellInfo.i}, type: ${cellInfo.type}`}
+  </div>
+{/if}
 
 <style>
   .info {
