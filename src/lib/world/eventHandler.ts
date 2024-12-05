@@ -1,14 +1,15 @@
-import { pack } from "d3";
 import type { CurrentCellInfoType } from "../../dataTypes/currentCellInfoType";
 import { getLocalSvgCoordinates } from "../../utils";
 import { mapInteraction } from "./mapInteraction";
 import { worldMetadata } from "./worldMetadata";
 import type { FeatureClass } from "../../dataTypes/packCellsType";
+import { type Selection } from "d3";
 
 export function onWheel(
   event: WheelEvent,
   mapContainer: HTMLDivElement,
   map: SVGSVGElement,
+  cellsLayer: Selection<SVGGElement, unknown, HTMLElement, any>,
 ) {
   if (!mapContainer) {
     return;
@@ -30,7 +31,7 @@ export function onWheel(
   mapInteraction.scale += event.deltaY * -0.01;
   mapInteraction.scale = Math.min(
     Math.max(mapInteraction.minScale, mapInteraction.scale),
-    3,
+    4,
   ); // 스케일 제한
 
   // 경계 제한 계산
@@ -65,6 +66,13 @@ export function onWheel(
 
   // 트랜스폼 업데이트
   map.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
+
+  // cells layer on off
+  if (mapInteraction.scale >= 3) {
+    worldMetadata.drawCells(cellsLayer);
+  } else {
+    worldMetadata.removeCells(cellsLayer);
+  }
 }
 
 export function onMouseDown(event: MouseEvent) {

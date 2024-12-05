@@ -13,10 +13,10 @@
   } from "../lib/world/eventHandler";
   import { mapInteraction } from "../lib/world/mapInteraction";
   import { worldMetadata } from "../lib/world/worldMetadata";
+  import { select } from "d3";
 
   let mapContainer: HTMLDivElement | null = $state(null);
   let mapElement: SVGSVGElement;
-
   let currentCellInfo = $state<CurrentCellInfoType>();
 
   $effect(() => {
@@ -25,10 +25,21 @@
       return;
     }
 
+    const svgViewbox = select("#fantasyMap").select("#viewbox");
+    const cellsLayer = svgViewbox
+      .append("g")
+      .attr("id", "cells")
+      .attr("stroke", "#808080")
+      .attr("stroke-width", 0.007)
+      .style("fill", "none");
+
+    // prepare cells border data
+    worldMetadata.prepareCellsBorder();
+
     mapElement = mapNode;
     mapElement.addEventListener("mousedown", onMouseDown);
     mapElement.addEventListener("wheel", (event) =>
-      onWheel(event, mapContainer!, mapElement),
+      onWheel(event, mapContainer!, mapElement, cellsLayer),
     );
 
     // 초기 map scale value setting
@@ -38,6 +49,7 @@
     const { elementDeltaMaxX, elementDeltaMaxY } =
       mapInteraction.getElementMaxDelta(containerRect, mapRect);
 
+    // map이 container 보다 클 경우
     if (elementDeltaMaxX > 0 || elementDeltaMaxY > 0) {
       // 새로 조정할 스케일 계산 (너비와 높이를 각각 비교)
       const widthScale = containerRect.width / mapRect.width;
@@ -54,7 +66,7 @@
     return () => {
       mapElement.removeEventListener("mousedown", onMouseDown);
       mapElement.removeEventListener("wheel", (event) =>
-        onWheel(event, mapContainer!, mapElement),
+        onWheel(event, mapContainer!, mapElement, cellsLayer),
       );
     };
   });
