@@ -3,13 +3,11 @@ import { getLocalSvgCoordinates } from "../../utils";
 import { mapInteraction } from "./mapInteraction";
 import { worldMetadata } from "./worldMetadata";
 import type { FeatureClass } from "../../dataTypes/packCellsType";
-import { type Selection } from "d3";
 
 export function onWheel(
   event: WheelEvent,
   mapContainer: HTMLDivElement | undefined,
   map: SVGSVGElement | undefined,
-  cellsLayer: Selection<SVGGElement, unknown, HTMLElement, any>,
 ) {
   if (!mapContainer || !map) {
     return;
@@ -66,13 +64,6 @@ export function onWheel(
 
   // 트랜스폼 업데이트
   map.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
-
-  // cells layer on off
-  if (mapInteraction.scale >= 3) {
-    worldMetadata.drawCells(cellsLayer);
-  } else {
-    worldMetadata.removeCells(cellsLayer);
-  }
 }
 
 export function onMouseDown(event: MouseEvent) {
@@ -136,6 +127,7 @@ export function onMouseLeave() {
 export function onMouseMoveMetadata(
   event: MouseEvent,
   map: SVGSVGElement | undefined,
+  latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
   if (!map) {
@@ -150,11 +142,22 @@ export function onMouseMoveMetadata(
   const feature = worldMetadata.pack?.cells.features[
     worldMetadata.pack.cells.cells.f[i]
   ] as FeatureClass;
+  const province = worldMetadata.findProvince(i);
   const newInfo: CurrentCellInfoType = {
     x,
     y,
     i,
+    province,
     type: feature.type,
   };
+
+  // draw province cells
+  const currentProvince = worldMetadata.findProvince(i);
+  if (latestCellInfo && latestCellInfo.province !== currentProvince) {
+    worldMetadata.removeCells(worldMetadata.cellsLayer);
+    if (currentProvince) {
+      worldMetadata.drawCells(worldMetadata.cellsLayer, currentProvince);
+    }
+  }
   updateCellInfoFn(newInfo);
 }

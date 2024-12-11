@@ -3,4 +3,5 @@ export type CurrentCellInfoType = {
   y: number;
   i?: number;
   type: string;
+  province?: number;
 };

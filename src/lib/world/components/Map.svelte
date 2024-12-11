@@ -13,25 +13,16 @@
     mapNode: SVGSVGElement | undefined;
   } = $props();
 
+  // map init, handler setting
   $effect(() => {
     if (!mapContainer || !mapNode) {
       return;
     }
-    const svgViewbox = select("#fantasyMap").select("#viewbox");
-    const cellsLayer = svgViewbox
-      .append("g")
-      .attr("id", "cells")
-      .attr("stroke", "#808080")
-      .attr("stroke-width", 0.007)
-      .style("fill", "none");
 
-    // prepare cells border data
+    const svgViewbox = select("#worldMap").select("#viewbox");
+
+    worldMetadata.setCellsLayerAttr(svgViewbox);
     worldMetadata.prepareCellsBorder();
-
-    mapNode.addEventListener("mousedown", onMouseDown);
-    mapNode.addEventListener("wheel", (event) =>
-      onWheel(event, mapContainer, mapNode, cellsLayer),
-    );
 
     // 초기 map scale value setting
     const containerRect = mapContainer.getBoundingClientRect();
@@ -53,13 +44,6 @@
       // 배율 적용
       mapNode.style.transform = `scale(${mapInteraction.minScale})`;
     }
-
-    return () => {
-      mapNode?.removeEventListener("mousedown", onMouseDown);
-      mapNode?.removeEventListener("wheel", (event) =>
-        onWheel(event, mapContainer, mapNode, cellsLayer),
-      );
-    };
   });
 
   const loadMap = async (path: string) => {
@@ -98,15 +82,25 @@
 {#await mapInit()}
   <Loading description="데이터를 불러오는 중입니다" />
 {:then mapContents}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <svg
-    id="fantasyMap"
+    id="worldMap"
     bind:this={mapNode}
-    width="1440"
-    height="812"
+    width={worldMetadata.mapWidth}
+    height={worldMetadata.mapHeight}
     version="1.1"
     xmlns="http://www.w3.org/2000/svg"
     xmlns:xlink="http://www.w3.org/1999/xlink"
+    onmousedown={onMouseDown}
+    onwheel={(event) => onWheel(event, mapContainer, mapNode)}
   >
     {@html mapContents}
   </svg>
 {/await}
+
+<style>
+  #worldMap {
+    position: absolute;
+    z-index: 1;
+  }
+</style>

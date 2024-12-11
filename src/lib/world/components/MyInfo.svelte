@@ -4,7 +4,7 @@
 
 {#if cellInfo}
   <div class="info">
-    {`x: ${cellInfo.x}, y: ${cellInfo.y}, idx: ${cellInfo.i}, type: ${cellInfo.type}`}
+    {`x: ${cellInfo.x}, y: ${cellInfo.y}, idx: ${cellInfo.i}, type: ${cellInfo.type}, province: ${cellInfo.province}`}
   </div>
 {/if}
 

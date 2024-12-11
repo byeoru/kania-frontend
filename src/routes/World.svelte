@@ -10,8 +10,8 @@
     onMouseUp,
   } from "../lib/world/eventHandler";
 
-  let mapContainer: HTMLDivElement | undefined = $state();
-  let childMap: SVGSVGElement | undefined = $state();
+  let mapContainer = $state<HTMLDivElement>();
+  let childMap = $state<SVGSVGElement>();
   let currentCellInfo = $state<CurrentCellInfoType>();
 
   const updateCurrentCellInfo = (newInfo: CurrentCellInfoType) => {
@@ -31,7 +31,12 @@
     class="map_container"
     bind:this={mapContainer}
     onmousemove={(event) =>
-      onMouseMoveMetadata(event, childMap, updateCurrentCellInfo)}
+      onMouseMoveMetadata(
+        event,
+        childMap,
+        currentCellInfo,
+        updateCurrentCellInfo,
+      )}
   >
     <Map {mapContainer} bind:mapNode={childMap} />
   </div>
@@ -50,5 +55,6 @@
     width: 100%;
     height: 100vh;
     overflow: hidden;
+    position: relative;
   }
 </style>
