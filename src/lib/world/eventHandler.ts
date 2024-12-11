@@ -7,11 +7,11 @@ import { type Selection } from "d3";
 
 export function onWheel(
   event: WheelEvent,
-  mapContainer: HTMLDivElement,
-  map: SVGSVGElement,
+  mapContainer: HTMLDivElement | undefined,
+  map: SVGSVGElement | undefined,
   cellsLayer: Selection<SVGGElement, unknown, HTMLElement, any>,
 ) {
-  if (!mapContainer) {
+  if (!mapContainer || !map) {
     return;
   }
 
@@ -86,8 +86,8 @@ export function onMouseDown(event: MouseEvent) {
 
 export function onMouseMove(
   event: MouseEvent,
-  mapContainer: HTMLDivElement,
-  map: SVGSVGElement,
+  mapContainer: HTMLDivElement | undefined,
+  map: SVGSVGElement | undefined,
 ) {
   if (!mapContainer || !map || !mapInteraction.isDragging) {
     return;
@@ -122,7 +122,7 @@ export function onMouseMove(
   map.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
 }
 
-export function onMouseUp(map: SVGSVGElement) {
+export function onMouseUp(map: SVGSVGElement | undefined) {
   if (!map || !mapInteraction.isDragging) {
     return;
   }
@@ -135,9 +135,13 @@ export function onMouseLeave() {
 
 export function onMouseMoveMetadata(
   event: MouseEvent,
-  map: SVGSVGElement,
+  map: SVGSVGElement | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
+  if (!map) {
+    return;
+  }
+
   const { x, y } = getLocalSvgCoordinates(event, map);
   const i = worldMetadata.findCell(x, y); // pack cell id
   if (!i) {
