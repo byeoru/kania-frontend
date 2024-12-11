@@ -5,21 +5,18 @@
   import { mapInteraction } from "../mapInteraction";
   import Loading from "../../Loading.svelte";
 
-  let mapNode: SVGSVGElement | undefined = $state();
-
   let {
     mapContainer,
-    map = $bindable(),
+    mapNode = $bindable(),
   }: {
     mapContainer: HTMLDivElement | undefined;
-    map: SVGSVGElement | undefined;
+    mapNode: SVGSVGElement | undefined;
   } = $props();
 
   $effect(() => {
     if (!mapContainer || !mapNode) {
       return;
     }
-    map = mapNode;
     const svgViewbox = select("#fantasyMap").select("#viewbox");
     const cellsLayer = svgViewbox
       .append("g")

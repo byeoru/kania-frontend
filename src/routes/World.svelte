@@ -33,7 +33,7 @@
     onmousemove={(event) =>
       onMouseMoveMetadata(event, childMap, updateCurrentCellInfo)}
   >
-    <Map {mapContainer} bind:map={childMap} />
+    <Map {mapContainer} bind:mapNode={childMap} />
   </div>
   <RegionInfo />
 </div>
