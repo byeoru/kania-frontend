@@ -116,7 +116,7 @@ export type BurgType =
 
 export interface CellsCells {
   readonly v: Array<number[]>;
-  readonly c: Array<number[]>;
+  readonly c: Array<number[]>; // [index] cell과 인접한 cell
   readonly b: number[];
   readonly i: { [key: string]: number };
   readonly p: Array<number[]>;
@@ -188,8 +188,8 @@ export interface FeatureClass {
   readonly firstCell: number;
   readonly group: FeatureGroup;
   readonly area?: number;
-  readonly vertices?: number[];
-  readonly shoreline?: number[];
+  vertices?: number[];
+  shoreline?: number[];
   readonly height?: number;
   readonly flux?: number;
   readonly temp?: number;

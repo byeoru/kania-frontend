@@ -1,5 +1,6 @@
 export const mapInteraction = {
-  minScale: 1, // 최소 배율
+  minScale: 0.3, // 최소 배율
+  maxScale: 0.7, // 최대 배율
   scale: 1, // 확대/축소 배율
   translateY: 0, // Y축 이동
   translateX: 0, // X축 이동

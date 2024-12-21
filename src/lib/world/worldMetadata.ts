@@ -1,34 +1,36 @@
 import { json, quadtree, type BaseType, type Selection } from "d3";
 import type { PackCellsType } from "../../dataTypes/packCellsType";
 import type { GridCellsType } from "../../dataTypes/gridCellsType";
+import {
+  BlurFilter,
+  Container,
+  Graphics,
+  type ContainerChild,
+  type PointData,
+} from "pixi.js";
 
 export const worldMetadata = {
   pack: {} as PackCellsType | null,
   grid: {} as GridCellsType | null,
-  mapWidth: 1440,
-  mapHeight: 812,
-  cellsBorder: {} as { [key: number]: string },
-  cellsLayer: {} as Selection<SVGGElement, unknown, HTMLElement, any>,
+  mapWidth: 7680,
+  mapHeight: 4320,
+  provinceCells: {} as { [key: number]: Array<number> },
+  mapLayerStage: null as Container<ContainerChild> | null,
+  // PixiJS Graphics 객체 생성
+  cellGraphics: new Graphics(), // 셀 경계선용 그래픽 객체
+  tempProvinceFillGraphics: new Graphics(), // 선택한 주 색칠용 그래픽 객체
+  tempSectorFillGraphics: new Graphics(), // 선택한 셀 색칠용 그래픽 객체
+  realmGraphics: new Graphics(), // 영토 색칠용 그래픽 객체
 
   async loadMetadata() {
-    this.pack = (await json("src/assets/data/kania-packcells.json")) ?? null;
-    this.grid = (await json("src/assets/data/kania-gridcells.json")) ?? null;
+    this.pack = (await json("public/assets/data/pack.json")) ?? null;
+    this.grid = (await json("public/assets/data/grid.json")) ?? null;
   },
 
   createQuadtree() {
     this.pack!.cells.cells.q = quadtree(
       this.pack!.cells.cells.p.map(([x, y], i) => [x, y, i]),
     );
-  },
-
-  setCellsLayerAttr(viewBox: Selection<BaseType, unknown, HTMLElement, any>) {
-    this.cellsLayer = viewBox
-      .append("g")
-      .attr("id", "cells")
-      // .attr("stroke", "#808080")
-      .attr("stroke", "#872600")
-      .attr("stroke-width", 0.05)
-      .style("fill", "none");
   },
 
   findCell(x: number, y: number, radius = Infinity) {
@@ -43,34 +45,131 @@ export const worldMetadata = {
     return this.pack.cells.cells.province[cellId];
   },
 
+  findCellCenter(points: PointData[]) {
+    // Sum all x and y coordinates
+    const sum = points.reduce(
+      (acc, point) => {
+        acc.x += point.x;
+        acc.y += point.y;
+        return acc;
+      },
+      { x: 0, y: 0 },
+    );
+
+    // Calculate the averages
+    const xCenter = sum.x / points.length;
+    const yCenter = sum.y / points.length;
+
+    return { x: xCenter, y: yCenter };
+  },
+
+  drawCapital(
+    cellId: number,
+    realmId: number,
+    parent: Selection<BaseType, unknown, null, undefined>,
+  ) {
+    const points = getPackPolygon(cellId);
+    const point = this.findCellCenter(points);
+    parent
+      .append("circle")
+      .attr("id", `realm_${realmId}`)
+      .attr("cx", point.x.toString())
+      .attr("cy", point.y.toString())
+      .attr("r", "5")
+      .attr("fill", "#FFFFFF")
+      .attr("stroke", "black")
+      .attr("stroke-width", "2");
+  },
+
   prepareCellsBorder() {
     const cellIds = this.pack!.cells.cells.i;
-    const polygon = getPackPolygon;
     for (const key in cellIds) {
       const province = this.findProvince(cellIds[key]);
       if (!province) continue;
-      if (!this.cellsBorder[province]) {
-        this.cellsBorder[province] = "";
+      if (!this.provinceCells[province]) {
+        this.provinceCells[province] = [];
       }
-      this.cellsBorder[province] += `M${polygon(cellIds[key])} `;
+      this.provinceCells[province].push(Number(key));
     }
   },
 
-  drawCells(
-    cellsLayer: Selection<SVGGElement, unknown, HTMLElement, any>,
-    provinceId: number,
-  ) {
-    cellsLayer.append("path").attr("d", this.cellsBorder[provinceId]);
+  drawProvinceCellsBorder(provinceId: number) {
+    const currentProvinceCells = this.provinceCells[provinceId];
+    currentProvinceCells.forEach((cellId) => {
+      this.drawSectorPolygon(cellId, this.cellGraphics);
+    });
+
+    this.cellGraphics.closePath();
+    this.cellGraphics.stroke({
+      color: 0x476600,
+      width: 1,
+    });
+    this.mapLayerStage!.addChild(this.cellGraphics);
   },
 
-  removeCells(cellsLayer: Selection<SVGGElement, unknown, HTMLElement, any>) {
-    cellsLayer.selectAll("path").remove();
+  removeProvinceCells() {
+    this.cellGraphics.clear();
+  },
+
+  fillOneCell(cellId: number, color: string) {
+    const blurFilter = new BlurFilter();
+    blurFilter.strength = 5; // 블러 강도를 설정 (0은 블러 없음, 값이 클수록 강한 블러)
+    this.tempSectorFillGraphics.filters = [blurFilter]; // 그래픽에 필터를 적용
+    this.drawSectorPolygon(cellId, this.tempSectorFillGraphics);
+    this.tempSectorFillGraphics.closePath();
+    this.tempSectorFillGraphics.fill({ color, alpha: 0.7 });
+    this.mapLayerStage!.addChild(this.tempSectorFillGraphics);
+  },
+
+  removeOneCell() {
+    this.tempSectorFillGraphics.clear();
+  },
+
+  fillRealm(cellIds: number[], color: string) {
+    const blurFilter = new BlurFilter();
+    blurFilter.strength = 8; // 블러 강도를 설정 (0은 블러 없음, 값이 클수록 강한 블러)
+    this.realmGraphics.filters = [blurFilter]; // 그래픽에 필터를 적용
+    cellIds.forEach((cellId) => {
+      this.drawSectorPolygon(cellId, this.realmGraphics);
+    });
+    this.realmGraphics.closePath();
+    this.realmGraphics.fill({ color, alpha: 0.3 });
+    this.mapLayerStage!.addChild(this.realmGraphics);
+  },
+
+  removeRealm() {
+    this.realmGraphics.clear();
+  },
+
+  // 클릭한 주 색칠하기
+  fillSelectedSectors(
+    cellIds: number[],
+    sectorColor: string,
+    lineColor: string,
+  ) {
+    cellIds.forEach((cellId) => {
+      this.drawSectorPolygon(cellId, this.tempProvinceFillGraphics);
+    });
+    this.tempProvinceFillGraphics.closePath();
+    this.tempProvinceFillGraphics.fill({ color: sectorColor, alpha: 0.5 });
+    this.tempProvinceFillGraphics.stroke({ color: lineColor, width: 1 });
+    this.mapLayerStage!.addChild(this.tempProvinceFillGraphics);
+  },
+
+  removeSelectedSectors() {
+    this.tempProvinceFillGraphics.clear();
+  },
+
+  drawSectorPolygon(cellId: number, graphic: Graphics) {
+    const pointDatas = getPackPolygon(cellId);
+    graphic.poly(pointDatas, true);
   },
 };
 
 // get polygon points for packed cells knowing cell id
-function getPackPolygon(i: number) {
-  return worldMetadata.pack!.cells.cells.v[i].map(
-    (v) => worldMetadata.pack!.cells.vertices.p[v],
-  );
+function getPackPolygon(i: number): PointData[] {
+  return worldMetadata.pack!.cells.cells.v[i].map((v) => {
+    const point = worldMetadata.pack!.cells.vertices.p[v];
+    return { x: point[0], y: point[1] };
+  });
 }

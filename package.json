@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build-and-toss": "vite build; rm -rf /Users/byeoru/go/src/github.com:byeoru/kania-backend/static/*; cp -r /Users/byeoru/documents/kania-frontend/dist/* /Users/byeoru/go/src/github.com:byeoru/kania-backend/static/",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.node.json"
   },
@@ -22,6 +23,8 @@
   },
   "dependencies": {
     "@types/d3": "^7.4.3",
-    "d3": "^7.9.0"
+    "axios": "^1.7.9",
+    "d3": "^7.9.0",
+    "pixi.js": "^8.6.4"
   }
 }

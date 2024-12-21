@@ -1,15 +1,19 @@
-import type { CurrentCellInfoType } from "../../dataTypes/currentCellInfoType";
+import type {
+  CurrentCellInfoType,
+  MapInteractionType,
+} from "../../dataTypes/aboutUiType";
 import { getLocalSvgCoordinates } from "../../utils";
 import { mapInteraction } from "./mapInteraction";
 import { worldMetadata } from "./worldMetadata";
 import type { FeatureClass } from "../../dataTypes/packCellsType";
+import { realmsStored, showModal } from "../shared";
 
 export function onWheel(
   event: WheelEvent,
   mapContainer: HTMLDivElement | undefined,
-  map: SVGSVGElement | undefined,
+  mapGroup: HTMLDivElement | undefined,
 ) {
-  if (!mapContainer || !map) {
+  if (!mapContainer || !mapGroup) {
     return;
   }
 
@@ -19,17 +23,17 @@ export function onWheel(
   const containerCenterX = containerRect.width / 2;
   const containerCenterY = containerRect.height / 2;
 
-  const mapRect = map.getBoundingClientRect();
+  const mapRect = mapGroup.getBoundingClientRect();
 
   // scale에 따라 transform-origin을 설정
-  map.style.transformOrigin = `0px 0px`;
+  mapGroup.style.transformOrigin = `0px 0px`;
 
   // 기존 좌표에 대한 스케일 적용
   const prevScale = mapInteraction.scale;
   mapInteraction.scale += event.deltaY * -0.01;
   mapInteraction.scale = Math.min(
     Math.max(mapInteraction.minScale, mapInteraction.scale),
-    4,
+    mapInteraction.maxScale,
   ); // 스케일 제한
 
   // 경계 제한 계산
@@ -63,7 +67,114 @@ export function onWheel(
   }
 
   // 트랜스폼 업데이트
-  map.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
+  mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
+}
+
+export function onClick(
+  event: MouseEvent,
+  map: SVGSVGElement | undefined,
+  updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
+  latestCellInfo: CurrentCellInfoType | undefined,
+  mapInteraction: MapInteractionType,
+) {
+  if (!map) {
+    return;
+  }
+
+  switch (mapInteraction) {
+    case "NORMAL":
+      clickNormal(event, map, updateCellInfoFn);
+      break;
+    case "CELL_SELECTION":
+      clickCellSection(event, map, latestCellInfo, updateCellInfoFn);
+      break;
+  }
+}
+
+function clickCellSection(
+  event: MouseEvent,
+  map: SVGSVGElement,
+  latestCellInfo: CurrentCellInfoType | undefined,
+  updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
+) {
+  worldMetadata.removeProvinceCells();
+  const { x, y } = getLocalSvgCoordinates(event, map);
+  const i = worldMetadata.findCell(x, y); // pack cell id
+  if (!i) {
+    return;
+  }
+  const feature = worldMetadata.pack!.cells.features[
+    worldMetadata.pack!.cells.cells.f[i]
+  ] as FeatureClass;
+  const population = worldMetadata.pack!.cells.cells.pop[i];
+  const elevation = worldMetadata.pack!.cells.cells.h[i];
+  const provinceId = worldMetadata.findProvince(i);
+  if (provinceId && latestCellInfo?.provinceId === provinceId) {
+    showModal.set(true);
+  }
+  const newInfo: CurrentCellInfoType = {
+    x,
+    y,
+    i,
+    provinceId: provinceId,
+    type: feature.type,
+    population,
+    elevation,
+    biome: "",
+    countryName: "",
+    nickname: "",
+    political_entity: "",
+  };
+  updateCellInfoFn(newInfo);
+  if (provinceId) {
+    worldMetadata.drawProvinceCellsBorder(provinceId);
+  }
+}
+
+function clickNormal(
+  event: MouseEvent,
+  map: SVGSVGElement,
+  updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
+) {
+  worldMetadata.removeSelectedSectors();
+  worldMetadata.removeOneCell();
+  const { x, y } = getLocalSvgCoordinates(event, map);
+  const i = worldMetadata.findCell(x, y); // pack cell id
+  if (!i) {
+    return;
+  }
+  const feature = worldMetadata.pack!.cells.features[
+    worldMetadata.pack!.cells.cells.f[i]
+  ] as FeatureClass;
+  const population = worldMetadata.pack!.cells.cells.pop[i];
+  const elevation = worldMetadata.pack!.cells.cells.h[i];
+  const provinceId = worldMetadata.findProvince(i);
+
+  const realmId = realmsStored.sectorRealmMap.get(i);
+  const realmInfo = realmId ? realmsStored.realmInfoMap.get(realmId) : null;
+
+  const newInfo: CurrentCellInfoType = {
+    x,
+    y,
+    i,
+    provinceId: provinceId,
+    type: feature.type,
+    population,
+    elevation,
+    biome: "",
+    countryName: realmInfo?.name,
+    nickname: realmInfo?.owner_nickname ?? "없음",
+    political_entity: realmInfo?.political_entity ?? "없음",
+  };
+  updateCellInfoFn(newInfo);
+  if (provinceId && !realmsStored.sectorRealmMap.has(i)) {
+    worldMetadata.fillSelectedSectors(
+      worldMetadata.provinceCells[provinceId],
+      "0xC8B4A0",
+      "0x8C8C8C",
+    );
+    worldMetadata.fillOneCell(i, "0x993800");
+  }
 }
 
 export function onMouseDown(event: MouseEvent) {
@@ -78,14 +189,14 @@ export function onMouseDown(event: MouseEvent) {
 export function onMouseMove(
   event: MouseEvent,
   mapContainer: HTMLDivElement | undefined,
-  map: SVGSVGElement | undefined,
+  mapGroup: HTMLDivElement | undefined,
 ) {
-  if (!mapContainer || !map || !mapInteraction.isDragging) {
+  if (!mapContainer || !mapGroup || !mapInteraction.isDragging) {
     return;
   }
 
   const containerRect = mapContainer.getBoundingClientRect();
-  const mapRect = map.getBoundingClientRect();
+  const mapRect = mapGroup.getBoundingClientRect();
 
   // 이동 거리 계산
   const { dragDeltaX, dragDeltaY } = mapInteraction.getMouseDragDelta(event);
@@ -110,7 +221,7 @@ export function onMouseMove(
   mapInteraction.updateStartXY(event);
 
   // 이동 적용
-  map.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
+  mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
 }
 
 export function onMouseUp(map: SVGSVGElement | undefined) {
@@ -129,8 +240,9 @@ export function onMouseMoveMetadata(
   map: SVGSVGElement | undefined,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
+  mapInteractionMode: MapInteractionType,
 ) {
-  if (!map) {
+  if (!map || !latestCellInfo || mapInteractionMode !== "CELL_SELECTION") {
     return;
   }
 
@@ -142,22 +254,31 @@ export function onMouseMoveMetadata(
   const feature = worldMetadata.pack?.cells.features[
     worldMetadata.pack.cells.cells.f[i]
   ] as FeatureClass;
-  const province = worldMetadata.findProvince(i);
+  const provinceId = worldMetadata.findProvince(i) ?? null;
+  const population = worldMetadata.pack!.cells.cells.pop[i];
+  const elevation = worldMetadata.pack!.cells.cells.h[i];
+  if (realmsStored.sectorRealmMap.has(i)) {
+  }
   const newInfo: CurrentCellInfoType = {
     x,
     y,
     i,
-    province,
+    provinceId: latestCellInfo.provinceId,
     type: feature.type,
+    population,
+    elevation,
+    biome: "",
+    countryName: "",
+    nickname: "",
+    political_entity: "",
   };
-
-  // draw province cells
-  const currentProvince = worldMetadata.findProvince(i);
-  if (latestCellInfo && latestCellInfo.province !== currentProvince) {
-    worldMetadata.removeCells(worldMetadata.cellsLayer);
-    if (currentProvince) {
-      worldMetadata.drawCells(worldMetadata.cellsLayer, currentProvince);
+  if (feature.land && provinceId === latestCellInfo.provinceId) {
+    if (i !== latestCellInfo.i) {
+      worldMetadata.removeOneCell();
+      worldMetadata.fillOneCell(i, "0x993800");
     }
+  } else {
+    worldMetadata.removeOneCell();
   }
   updateCellInfoFn(newInfo);
 }
