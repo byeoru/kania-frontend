@@ -1,12 +1,22 @@
 import type {
   CurrentCellInfoType,
-  MapInteractionType,
-} from "../../dataTypes/aboutUiType";
-import { getLocalSvgCoordinates } from "../../utils";
-import { mapInteraction } from "./mapInteraction";
-import { worldMetadata } from "./worldMetadata";
-import type { FeatureClass } from "../../dataTypes/packCellsType";
-import { realmsStored, showModal } from "../shared";
+  GameModeType,
+} from "../../dataTypes/aboutUiType.ts";
+import { getLocalSvgCoordinates, openModal } from "../../utils.ts";
+import { mapInteraction } from "./mapInteraction.ts";
+import { worldMetadata } from "./worldMetadata.ts";
+import type { FeatureClass } from "../../dataTypes/packCellsType.ts";
+import {
+  attackLevyInfo,
+  getWorldTime,
+  myRealmPopulationStored,
+  sectorRealmMapStored,
+  setAttackLevyInfo,
+  setMapInteractionMode,
+} from "../shared.svelte.ts";
+import { sectorApi } from "./api/sector.ts";
+import CreateRealm from "./components/modal/CreateRealm.svelte";
+import Attack from "./components/modal/Attack.svelte";
 
 export function onWheel(
   event: WheelEvent,
@@ -70,24 +80,45 @@ export function onWheel(
   mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
 }
 
-export function onClick(
+export async function onClick(
   event: MouseEvent,
   map: SVGSVGElement | undefined,
+  myRealmId: number | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
   latestCellInfo: CurrentCellInfoType | undefined,
-  mapInteraction: MapInteractionType,
+  gameModeType: GameModeType,
 ) {
   if (!map) {
     return;
   }
 
-  switch (mapInteraction) {
+  switch (gameModeType) {
     case "NORMAL":
-      clickNormal(event, map, updateCellInfoFn);
+      await clickNormal(event, map, myRealmId, updateCellInfoFn);
       break;
     case "CELL_SELECTION":
       clickCellSection(event, map, latestCellInfo, updateCellInfoFn);
       break;
+    case "ATTACK":
+      clickAttack(event, map);
+      break;
+  }
+}
+
+function clickAttack(event: MouseEvent, map: SVGSVGElement) {
+  const { x, y } = getLocalSvgCoordinates(event, map);
+  const i = worldMetadata.findCell(x, y); // pack cell id
+  if (!i) {
+    return;
+  }
+  if (!attackLevyInfo) {
+    alert("공격 부대에 대한 정보가 없습니다.");
+    return;
+  }
+  const nearCells =
+    worldMetadata.pack!.cells.cells.c[attackLevyInfo.encampment];
+  if (nearCells.find((cell) => cell === i)) {
+    openModal("공격", Attack);
   }
 }
 
@@ -110,8 +141,13 @@ function clickCellSection(
   const elevation = worldMetadata.pack!.cells.cells.h[i];
   const provinceId = worldMetadata.findProvince(i);
   if (provinceId && latestCellInfo?.provinceId === provinceId) {
-    showModal.set(true);
+    openModal("생성", CreateRealm, {
+      currentCellInfo: latestCellInfo,
+      worldTime: getWorldTime(),
+      mapNode: map,
+    });
   }
+
   const newInfo: CurrentCellInfoType = {
     x,
     y,
@@ -121,9 +157,6 @@ function clickCellSection(
     population,
     elevation,
     biome: "",
-    countryName: "",
-    nickname: "",
-    political_entity: "",
   };
   updateCellInfoFn(newInfo);
   if (provinceId) {
@@ -131,9 +164,10 @@ function clickCellSection(
   }
 }
 
-function clickNormal(
+async function clickNormal(
   event: MouseEvent,
   map: SVGSVGElement,
+  myRealmId: number | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
   worldMetadata.removeSelectedSectors();
@@ -146,12 +180,20 @@ function clickNormal(
   const feature = worldMetadata.pack!.cells.features[
     worldMetadata.pack!.cells.cells.f[i]
   ] as FeatureClass;
-  const population = worldMetadata.pack!.cells.cells.pop[i];
   const elevation = worldMetadata.pack!.cells.cells.h[i];
   const provinceId = worldMetadata.findProvince(i);
 
-  const realmId = realmsStored.sectorRealmMap.get(i);
-  const realmInfo = realmId ? realmsStored.realmInfoMap.get(realmId) : null;
+  const clickedRealmId = sectorRealmMapStored.get(i);
+
+  let population = 0;
+  // stored 조회
+  if (myRealmPopulationStored.has(i)) {
+    population = myRealmPopulationStored.get(i)!;
+  } else {
+    // api 호출
+    population = await getPopulation(i, clickedRealmId);
+    myRealmPopulationStored.set(i, population);
+  }
 
   const newInfo: CurrentCellInfoType = {
     x,
@@ -162,18 +204,31 @@ function clickNormal(
     population,
     elevation,
     biome: "",
-    countryName: realmInfo?.name,
-    nickname: realmInfo?.owner_nickname ?? "없음",
-    political_entity: realmInfo?.political_entity ?? "없음",
   };
   updateCellInfoFn(newInfo);
-  if (provinceId && !realmsStored.sectorRealmMap.has(i)) {
+  if (provinceId && !sectorRealmMapStored.has(i)) {
     worldMetadata.fillSelectedSectors(
       worldMetadata.provinceCells[provinceId],
       "0xC8B4A0",
       "0x8C8C8C",
     );
     worldMetadata.fillOneCell(i, "0x993800");
+  }
+  async function getPopulation(i: number, clickedRealmId: number | undefined) {
+    // 점령된 영토일 경우
+    if (clickedRealmId) {
+      // 내 영토일 경우
+      if (myRealmId && clickedRealmId === myRealmId) {
+        const res = await sectorApi.getPopulation({ cell_number: i });
+        if (res.status === 200) {
+          return res.data.population;
+        }
+        alert("인구 정보를 가져오는데 실패했습니다.");
+        return 0;
+      }
+      return 0;
+    }
+    return worldMetadata.pack!.cells.cells.pop[i];
   }
 }
 
@@ -240,9 +295,9 @@ export function onMouseMoveMetadata(
   map: SVGSVGElement | undefined,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
-  mapInteractionMode: MapInteractionType,
+  gameModeType: GameModeType,
 ) {
-  if (!map || !latestCellInfo || mapInteractionMode !== "CELL_SELECTION") {
+  if (!map || !latestCellInfo || gameModeType !== "CELL_SELECTION") {
     return;
   }
 
@@ -257,7 +312,7 @@ export function onMouseMoveMetadata(
   const provinceId = worldMetadata.findProvince(i) ?? null;
   const population = worldMetadata.pack!.cells.cells.pop[i];
   const elevation = worldMetadata.pack!.cells.cells.h[i];
-  if (realmsStored.sectorRealmMap.has(i)) {
+  if (sectorRealmMapStored.has(i)) {
   }
   const newInfo: CurrentCellInfoType = {
     x,
@@ -268,9 +323,6 @@ export function onMouseMoveMetadata(
     population,
     elevation,
     biome: "",
-    countryName: "",
-    nickname: "",
-    political_entity: "",
   };
   if (feature.land && provinceId === latestCellInfo.provinceId) {
     if (i !== latestCellInfo.i) {
@@ -281,4 +333,15 @@ export function onMouseMoveMetadata(
     worldMetadata.removeOneCell();
   }
   updateCellInfoFn(newInfo);
+}
+
+export function onKeyUp(event: KeyboardEvent) {
+  switch (event.key) {
+    case "Escape":
+      worldMetadata.removeSelectedSectors();
+      worldMetadata.removeOneCell();
+      setAttackLevyInfo(null);
+      setMapInteractionMode("NORMAL");
+      break;
+  }
 }

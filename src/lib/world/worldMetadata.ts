@@ -23,8 +23,8 @@ export const worldMetadata = {
   realmGraphics: new Graphics(), // 영토 색칠용 그래픽 객체
 
   async loadMetadata() {
-    this.pack = (await json("public/assets/data/pack.json")) ?? null;
-    this.grid = (await json("public/assets/data/grid.json")) ?? null;
+    this.pack = (await json("assets/data/pack.json")) ?? null;
+    this.grid = (await json("assets/data/grid.json")) ?? null;
   },
 
   createQuadtree() {
@@ -61,6 +61,22 @@ export const worldMetadata = {
     const yCenter = sum.y / points.length;
 
     return { x: xCenter, y: yCenter };
+  },
+
+  drawDefenseUnitFlag(
+    cellId: number,
+    // levyId: number,
+    parent: Selection<BaseType, unknown, null, undefined>,
+  ) {
+    const points = getPackPolygon(cellId);
+    const point = this.findCellCenter(points);
+    parent
+      .append("use")
+      .attr("href", `#defense`)
+      // .attr("id", `levy_${levyId}`)
+      .attr("class", "defense")
+      .attr("x", point.x)
+      .attr("y", point.y);
   },
 
   drawCapital(
@@ -139,6 +155,18 @@ export const worldMetadata = {
 
   removeRealm() {
     this.realmGraphics.clear();
+  },
+
+  // 주변 셀들 색칠하기
+  fillStrokeNearCells(cellId: number) {
+    const nearSectors = this.pack!.cells.cells.c[cellId];
+    nearSectors.forEach((sectorId) => {
+      this.drawSectorPolygon(sectorId, this.tempProvinceFillGraphics);
+    });
+    this.tempProvinceFillGraphics.closePath();
+    this.tempProvinceFillGraphics.stroke({ color: "0x476600", width: 1 });
+    this.tempProvinceFillGraphics.fill({ color: "0x998A00", alpha: 0.5 });
+    this.mapLayerStage!.addChild(this.tempProvinceFillGraphics);
   },
 
   // 클릭한 주 색칠하기

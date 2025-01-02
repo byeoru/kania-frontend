@@ -1,12 +1,16 @@
 <script lang="ts">
-  import { showModal } from "./shared";
+  import { showModal } from "./shared.svelte.ts";
 
-  let { header, children } = $props();
+  let { header, children, props } = $props();
 
   let dialog = $state<HTMLDialogElement>(); // HTMLDialogElement
 
   $effect(() => {
-    if (showModal) dialog?.showModal();
+    if (showModal) {
+      dialog?.showModal();
+    } else {
+      dialog?.close();
+    }
   });
 </script>
 
@@ -17,30 +21,31 @@
     $showModal = false;
   }}
 >
-  <div>
-    <div class="header">
-      {@render header?.()}
-    </div>
-    <hr />
-    <div class="body">
-      {@render children?.()}
-    </div>
-    <hr />
+  <div class="header">
+    {header}
+  </div>
+  <div class="body">
+    <!-- svelte-ignore svelte_component_deprecated -->
+    <svelte:component this={children} {...props} />
   </div>
 </dialog>
 
 <style>
   dialog {
-    max-width: 32em;
-    border-radius: 0.2em;
+    width: 17em;
+    height: 37em;
+    background-image: url("/assets/img/character_select_texture.png");
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-color: transparent;
     border: none;
-    padding: 0;
+    outline: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   dialog::backdrop {
     background: rgba(0, 0, 0, 0.3);
-  }
-  dialog > div {
-    padding: 1em;
   }
   dialog[open] {
     animation: zoom 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -65,8 +70,22 @@
     }
   }
   .header {
+    width: 97%;
+    height: 2.5em;
     display: flex;
     justify-content: center;
     align-items: center;
+    margin-top: 2.3em;
+    font-size: 1.3em;
+    font-weight: 400;
+    color: rgb(136, 93, 36);
+  }
+  .body {
+    width: 97%;
+    height: 30em;
+    margin-top: 0.3em;
+    position: relative;
+    display: flex;
+    justify-content: center;
   }
 </style>

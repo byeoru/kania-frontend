@@ -3,7 +3,6 @@ import type { ApiResponseType } from "./response";
 type RealmType = {
   id: number;
   name: string;
-  owner_id: number;
   owner_nickname: string;
   capital_number: number;
   political_entity: string;
@@ -16,31 +15,31 @@ type RealmType = {
   };
 };
 
+interface MyRealmType extends RealmType {
+  population_growth_rate: number;
+  state_coffers: number;
+  census_at: Date;
+  tax_collection_at: Date;
+}
+
 export type SectorIdType = number;
 export type RealmIdType = number;
 
 export type RealmFeatureType = {
   id: RealmIdType;
   name: string;
-  owner_id: number;
   owner_nickname: string;
   capital_number: number;
   political_entity: string;
   color: string;
 };
 
-export type RealmsStoredType = {
-  myRealmId?: number;
-  sectorRealmMap: Map<SectorIdType, RealmIdType>;
-  realmInfoMap: Map<RealmIdType, RealmFeatureType>;
-};
-
 export interface GetMyRealmResponseType extends ApiResponseType {
-  realm: RealmType;
+  realm: MyRealmType;
 }
 
 export interface GetMeAndOthersReamsType extends ApiResponseType {
-  my_realm: RealmType;
+  my_realm: MyRealmType;
   the_others_realms: RealmType[];
 }
 
@@ -49,8 +48,32 @@ export type EstablishRealmRequestType = {
   cell_number: number;
   province_number: number;
   realm_color: string;
+  init_date: string;
+  population: number;
 };
 
 export interface EstablishRealmResponseType extends ApiResponseType {
-  ream_id: number;
+  my_realm: {
+    id: number;
+    name: string;
+    owner_nickname: string;
+    capital_number: number;
+    political_entity: string;
+    color: string;
+    population_growth_rate: number;
+    state_coffers: number;
+    census_at: Date;
+    tax_collection_at: Date;
+  };
 }
+
+export type ExcuteCensusRequestType = {
+  current_date: string;
+};
+
+export type InternalAffairsType = {
+  populationGrowthRate?: number;
+  stateCoffers?: number;
+  censusAt?: Date;
+  taxCollectionAt?: Date;
+};

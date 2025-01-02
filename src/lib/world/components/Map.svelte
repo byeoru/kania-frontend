@@ -12,8 +12,17 @@
   import { Application } from "pixi.js";
   import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
   import { HttpStatusCode } from "axios";
-  import { mapInteractionMode, realmsStored } from "../../shared";
-  import { select } from "d3";
+  import {
+    getMapInteractionMode,
+    myRealmIdStored,
+    myRealmLeviesStored,
+    realmInfoMapStored,
+    sectorRealmMapStored,
+    setMapInteractionMode,
+    storeCellLevies,
+  } from "../../shared.svelte";
+  import { select, xml, type BaseType, type Selection } from "d3";
+  import { realmMemberApi } from "../api/realm_member";
 
   let {
     mapContainer,
@@ -37,6 +46,19 @@
 
     // map에 capital group 추가
     select(mapNode).append("g").attr("id", "capitals");
+    // map에 unit flag group 추가
+    select(mapNode).append("g").attr("id", "unit_flags");
+
+    // map defs에 unit flag group defs 추가
+    const unitFlagsGroup = select(mapNode)
+      .select("defs")
+      .append("g")
+      .attr("id", "unit_flags_defs");
+
+    xml("/assets/img/defense_ribbon_h.svg").then((data) => {
+      const importedSVG = data.documentElement;
+      unitFlagsGroup.node()?.append(importedSVG);
+    });
 
     worldMetadata.prepareCellsBorder();
 
@@ -69,12 +91,23 @@
   });
 
   $effect(() => {
-    switch ($mapInteractionMode) {
+    switch (getMapInteractionMode()) {
       case "NORMAL":
         worldMetadata.removeProvinceCells();
+        worldMetadata.removeSelectedSectors();
         worldMetadata.removeOneCell();
         break;
       case "CELL_SELECTION":
+        break;
+      case "ATTACK":
+        worldMetadata.removeProvinceCells();
+        worldMetadata.removeSelectedSectors();
+        worldMetadata.removeOneCell();
+        if (!currentCellInfo) {
+          alert("지역 데이터가 없습니다.");
+          break;
+        }
+        worldMetadata.fillStrokeNearCells(currentCellInfo.i);
         break;
     }
   });
@@ -93,7 +126,7 @@
     await worldMetadata.loadMetadata();
     worldMetadata.createQuadtree();
 
-    const mapHtml = await loadMap("public/assets/map/kania_.svg");
+    const mapHtml = await loadMap("assets/map/kania_.svg");
     const svgContents = getInsideTag(mapHtml, "svg");
     return svgContents;
   };
@@ -131,10 +164,8 @@
     worldMetadata.mapLayerStage = app.stage;
   }
 
-  async function mapLayerInit(canvas: HTMLCanvasElement) {
-    await pixiInit(canvas);
+  async function callApiForDrawRealm() {
     const res = await realmApi.getMeAndTheOthersRealms();
-
     switch (res.status) {
       case HttpStatusCode.Ok:
         const capitalGroup = select(mapNode!).select("#capitals");
@@ -146,7 +177,6 @@
           my_realm: {
             id: myRealmId,
             name: myRealmName,
-            owner_id: myOwnerId,
             owner_nickname: myNickname,
             color: myColor,
             political_entity: myPoliticalEntity,
@@ -157,33 +187,33 @@
           },
           the_others_realms,
         } = res.data;
-        myCells.forEach((cellId) => {
-          realmsStored.sectorRealmMap.set(cellId, myRealmId);
-        });
-        realmsStored.myRealmId = myRealmId;
-        // 내 세력 sector 저장
-        realmsStored.realmInfoMap.set(myRealmId, {
+        $myRealmIdStored = myRealmId;
+        // 내 세력 sector info 저장
+        realmInfoMapStored.set(myRealmId, {
           id: myRealmId,
           name: myRealmName,
-          owner_id: myOwnerId,
           owner_nickname: myNickname,
           capital_number: myCapitalNumber,
           political_entity: myPoliticalEntity,
           color: myColor,
         });
-        // 다른 세력 sector 저장
-        the_others_realms.forEach((realm) => {
-          realmsStored.realmInfoMap.set(realm.id, {
+        // 내 세력 sector id 저장
+        myCells.forEach((cellId) => {
+          sectorRealmMapStored.set(cellId, myRealmId);
+        });
+        // 다른 세력 sector info 저장
+        the_others_realms.map((realm) => {
+          realmInfoMapStored.set(realm.id, {
             id: realm.id,
             name: realm.name,
-            owner_id: realm.owner_id,
             owner_nickname: realm.owner_nickname,
             capital_number: realm.capital_number,
             political_entity: realm.political_entity,
             color: realm.color,
           });
+          // 다른 세력 sector id 저장
           realm.realm_cells_json.RawMessage.cells.forEach((cellId) => {
-            realmsStored.sectorRealmMap.set(cellId, realm.id);
+            sectorRealmMapStored.set(cellId, realm.id);
           });
         });
         // draw my realm
@@ -203,9 +233,39 @@
         });
         break;
       case HttpStatusCode.NoContent:
-        $mapInteractionMode = "CELL_SELECTION";
+        setMapInteractionMode("CELL_SELECTION");
         break;
     }
+  }
+
+  function drawLevies(
+    unitFlagsGroup: Selection<BaseType, unknown, null, undefined>,
+  ) {
+    const cellNumbers = myRealmLeviesStored.keys();
+    for (const cellNumber of cellNumbers) {
+      worldMetadata.drawDefenseUnitFlag(cellNumber, unitFlagsGroup);
+    }
+  }
+
+  async function callApiForDrawLevies() {
+    const res = await realmMemberApi.getRealmMembersLevies();
+    switch (res.status) {
+      case HttpStatusCode.Ok:
+        const unitFlagsGroup = select(mapNode!).select("#unit_flags");
+        const { realm_members } = res.data;
+        storeCellLevies(realm_members);
+        drawLevies(unitFlagsGroup);
+        break;
+      case HttpStatusCode.NotFound:
+        alert("소속된 국가가 존재하지 않습니다.");
+        break;
+    }
+  }
+
+  async function mapLayerInit(canvas: HTMLCanvasElement) {
+    await pixiInit(canvas);
+    await callApiForDrawRealm();
+    await callApiForDrawLevies();
   }
 </script>
 
@@ -221,9 +281,10 @@
       onClick(
         event,
         mapNode,
+        $myRealmIdStored,
         updateCurrentCellInfo,
         currentCellInfo,
-        $mapInteractionMode,
+        getMapInteractionMode(),
       )}
     onmousemove={(event) =>
       onMouseMoveMetadata(
@@ -231,7 +292,7 @@
         mapNode,
         currentCellInfo,
         updateCurrentCellInfo,
-        $mapInteractionMode,
+        getMapInteractionMode(),
       )}
     onwheel={(event) => onWheel(event, mapContainer, mapGroup)}
     onmousedown={onMouseDown}
