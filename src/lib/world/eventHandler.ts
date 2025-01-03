@@ -2,7 +2,11 @@ import type {
   CurrentCellInfoType,
   GameModeType,
 } from "../../dataTypes/aboutUiType.ts";
-import { getLocalSvgCoordinates, openModal } from "../../utils.ts";
+import {
+  getLocalSvgCoordinates,
+  openModal,
+  updateToNormalMode,
+} from "../../utils.ts";
 import { mapInteraction } from "./mapInteraction.ts";
 import { worldMetadata } from "./worldMetadata.ts";
 import type { FeatureClass } from "../../dataTypes/packCellsType.ts";
@@ -338,10 +342,7 @@ export function onMouseMoveMetadata(
 export function onKeyUp(event: KeyboardEvent) {
   switch (event.key) {
     case "Escape":
-      worldMetadata.removeSelectedSectors();
-      worldMetadata.removeOneCell();
-      setAttackLevyInfo(null);
-      setMapInteractionMode("NORMAL");
+      updateToNormalMode();
       break;
   }
 }

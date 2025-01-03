@@ -2,6 +2,7 @@
   import type { CurrentCellInfoType } from "../dataTypes/aboutUiType";
   import Modal from "../lib/Modal.svelte";
   import {
+    getMapInteractionMode,
     getWorldTime,
     modalContent,
     modalProps,
@@ -13,6 +14,7 @@
   } from "../lib/shared.svelte.ts";
   import Map from "../lib/world/components/Map.svelte";
   import MyInfo from "../lib/world/components/MyInfo.svelte";
+  import NormalModeBtn from "../lib/world/components/NormalModeBtn.svelte";
   import RegionInfo from "../lib/world/components/RegionInfo.svelte";
   import StationedTroops from "../lib/world/components/StationedTroops.svelte";
   import {
@@ -73,6 +75,9 @@
     cellInfo={currentCellInfo}
     worldTime={getWorldTime()}
   />
+  {#if getMapInteractionMode() === "ATTACK"}
+    <NormalModeBtn />
+  {/if}
 </div>
 
 <style>

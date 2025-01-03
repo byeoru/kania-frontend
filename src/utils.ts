@@ -5,11 +5,14 @@ import type {
   SvelteComponentTyped,
 } from "svelte";
 import {
+  setAttackLevyInfo,
+  setMapInteractionMode,
   setModalContent,
   setModalProps,
   setModalTitle,
   showModal,
 } from "./lib/shared.svelte";
+import { worldMetadata } from "./lib/world/worldMetadata";
 
 // SVG local 좌표 변환 함수
 export function getLocalSvgCoordinates(event: MouseEvent, svg: SVGSVGElement) {
@@ -46,4 +49,11 @@ export function openModal(title: string, content: any, props?: {}) {
   setModalContent(content);
   setModalProps(props);
   showModal.set(true);
+}
+
+export function updateToNormalMode() {
+  worldMetadata.removeSelectedSectors();
+  worldMetadata.removeOneCell();
+  setAttackLevyInfo(null);
+  setMapInteractionMode("NORMAL");
 }
