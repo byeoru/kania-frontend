@@ -1,8 +1,4 @@
 <script lang="ts">
-  import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
-  import { type ProvinceClass } from "../../../dataTypes/packCellsType";
-  import { worldMetadata } from "../worldMetadata";
-
   const {
     myRealmId,
     worldTime,

@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
-  import type { RealmMemberIDsType } from "../../../model/realm_member";
   import { myRealmLeviesStored } from "../../shared.svelte";
   import LevyInfo from "./LevyInfo.svelte";
 

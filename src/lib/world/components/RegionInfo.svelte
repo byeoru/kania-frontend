@@ -12,10 +12,12 @@
 
   const {
     cellInfo,
+    updateCellInfoFn,
     worldTime,
     myRealmId,
   }: {
     cellInfo: CurrentCellInfoType | undefined;
+    updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
     worldTime: string | undefined;
     myRealmId: number | undefined;
   } = $props();
@@ -115,7 +117,10 @@
 
   async function onMusterClick() {
     if (!worldTime) return;
-    openModal("부대 창설", Muster, { currentCellInfo: cellInfo });
+    openModal("부대 창설", Muster, {
+      currentCellInfo: cellInfo,
+      updateCellInfoFn,
+    });
   }
 </script>
 

@@ -28,5 +28,6 @@ export type LevyType = {
 export interface LevyResponseType extends ApiResponseType {
   levy: LevyType;
   state_coffers: number;
+  population: number;
   realm_member_ids: RealmMemberIDsType;
 }

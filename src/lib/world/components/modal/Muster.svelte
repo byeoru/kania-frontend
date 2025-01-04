@@ -1,14 +1,20 @@
 <script lang="ts">
   import type { CurrentCellInfoType } from "../../../../dataTypes/aboutUiType";
   import FooterBtn from "./FooterBtn.svelte";
-  import { showModal, storeCellLevies } from "../../../shared.svelte";
+  import {
+    myRealmPopulationStored,
+    showModal,
+    storeCellLevies,
+  } from "../../../shared.svelte";
   import { HttpStatusCode } from "axios";
   import { levyApi } from "../../api/levy";
 
   let {
     currentCellInfo,
+    updateCellInfoFn,
   }: {
     currentCellInfo: CurrentCellInfoType;
+    updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
   } = $props();
 
   let swordmen = $state(0);
@@ -55,6 +61,13 @@
             levies: [res.data.levy],
           },
         ]);
+        // 변경된 인구 수 업데이트
+        myRealmPopulationStored.set(currentCellInfo.i, res.data.population);
+
+        updateCellInfoFn({
+          ...currentCellInfo,
+          population: res.data.population,
+        });
         break;
       case HttpStatusCode.NotFound:
         alert("소속된 국가가 존재하지 않습니다.");

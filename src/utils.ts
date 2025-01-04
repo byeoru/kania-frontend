@@ -1,9 +1,3 @@
-import type {
-  Component,
-  ComponentType,
-  SvelteComponent,
-  SvelteComponentTyped,
-} from "svelte";
 import {
   setAttackLevyInfo,
   setMapInteractionMode,

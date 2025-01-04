@@ -5,6 +5,7 @@
   import {
     internalAffairs,
     myRealmIdStored,
+    myRealmPopulationStored,
     realmInfoMapStored,
     sectorRealmMapStored,
     setMapInteractionMode,
@@ -18,11 +19,12 @@
 
   let {
     currentCellInfo,
+    updateCellInfoFn,
     worldTime,
     mapNode,
-    dialog,
   }: {
     currentCellInfo: CurrentCellInfoType;
+    updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
     worldTime: string;
     mapNode: SVGSVGElement;
     dialog: HTMLDialogElement;
@@ -77,6 +79,7 @@
         },
       } = res.data;
       sectorRealmMapStored.set(i, id);
+      myRealmPopulationStored.set(i, currentCellInfo.population);
       realmInfoMapStored.set(id, {
         id,
         name,
@@ -91,8 +94,12 @@
       internalAffairs.censusAt = census_at;
       internalAffairs.taxCollectionAt = tax_collection_at;
       $myRealmIdStored = id;
-      document.querySelector(".population")!.innerHTML =
-        currentCellInfo.population.toString();
+      updateCellInfoFn({
+        ...currentCellInfo,
+        population: currentCellInfo.population,
+      });
+      // document.querySelector(".population")!.innerHTML =
+      //   currentCellInfo.population.toString();
       document.querySelector(".country_name")!.innerHTML = name;
       const { politicalEntity, status } =
         getPoliticalEntitySetKr(political_entity);

@@ -23,7 +23,6 @@
     onMouseMove,
     onMouseUp,
   } from "../lib/world/eventHandler.ts";
-  import type { RealmMemberIDsType } from "../model/realm_member.ts";
   import type { MessageType } from "../model/ws";
 
   let mapContainer = $state<HTMLDivElement>();
@@ -47,6 +46,10 @@
 
     setWorldTime(decodedDate);
   };
+
+  const updateCellInfoFn = (newInfo: CurrentCellInfoType) => {
+    currentCellInfo = newInfo;
+  };
 </script>
 
 {#if $showModal}
@@ -68,11 +71,13 @@
       bind:mapNode={childMap}
       bind:mapGroup
       bind:currentCellInfo
+      {updateCellInfoFn}
     />
   </div>
   <RegionInfo
     myRealmId={$myRealmIdStored}
     cellInfo={currentCellInfo}
+    {updateCellInfoFn}
     worldTime={getWorldTime()}
   />
   {#if getMapInteractionMode() === "ATTACK"}

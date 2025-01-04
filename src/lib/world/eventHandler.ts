@@ -15,8 +15,6 @@ import {
   getWorldTime,
   myRealmPopulationStored,
   sectorRealmMapStored,
-  setAttackLevyInfo,
-  setMapInteractionMode,
 } from "../shared.svelte.ts";
 import { sectorApi } from "./api/sector.ts";
 import CreateRealm from "./components/modal/CreateRealm.svelte";
@@ -147,6 +145,7 @@ function clickCellSection(
   if (provinceId && latestCellInfo?.provinceId === provinceId) {
     openModal("생성", CreateRealm, {
       currentCellInfo: latestCellInfo,
+      updateCellInfoFn,
       worldTime: getWorldTime(),
       mapNode: map,
     });

@@ -16,6 +16,7 @@
     getMapInteractionMode,
     myRealmIdStored,
     myRealmLeviesStored,
+    myRealmPopulationStored,
     realmInfoMapStored,
     sectorRealmMapStored,
     setMapInteractionMode,
@@ -29,11 +30,13 @@
     mapNode = $bindable(),
     mapGroup = $bindable(),
     currentCellInfo = $bindable(),
+    updateCellInfoFn,
   }: {
     mapContainer: HTMLDivElement | undefined;
     mapNode: SVGSVGElement | undefined;
     mapGroup: HTMLDivElement | undefined;
     currentCellInfo: CurrentCellInfoType | undefined;
+    updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
   } = $props();
 
   let mapLayer = $state<HTMLCanvasElement>();
@@ -111,10 +114,6 @@
         break;
     }
   });
-
-  const updateCurrentCellInfo = (newInfo: CurrentCellInfoType) => {
-    currentCellInfo = newInfo;
-  };
 
   const loadMap = async (path: string) => {
     const res = await fetch(path);
@@ -265,7 +264,9 @@
   async function mapLayerInit(canvas: HTMLCanvasElement) {
     await pixiInit(canvas);
     await callApiForDrawRealm();
-    await callApiForDrawLevies();
+    if ($myRealmIdStored) {
+      await callApiForDrawLevies();
+    }
   }
 </script>
 
@@ -282,7 +283,7 @@
         event,
         mapNode,
         $myRealmIdStored,
-        updateCurrentCellInfo,
+        updateCellInfoFn,
         currentCellInfo,
         getMapInteractionMode(),
       )}
@@ -291,7 +292,7 @@
         event,
         mapNode,
         currentCellInfo,
-        updateCurrentCellInfo,
+        updateCellInfoFn,
         getMapInteractionMode(),
       )}
     onwheel={(event) => onWheel(event, mapContainer, mapGroup)}
