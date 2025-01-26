@@ -3,14 +3,13 @@
   import Modal from "../lib/Modal.svelte";
   import {
     getMapInteractionMode,
+    getWebsocketClient,
     getWorldTime,
     modalContent,
     modalProps,
     modalTitle,
-    myRealmIdStored,
-    setWorldTime,
     showModal,
-    ws,
+    updateWorldTime,
   } from "../lib/shared.svelte.ts";
   import Map from "../lib/world/components/Map.svelte";
   import MyInfo from "../lib/world/components/MyInfo.svelte";
@@ -23,7 +22,6 @@
     onMouseMove,
     onMouseUp,
   } from "../lib/world/eventHandler.ts";
-  import type { MessageType } from "../model/ws";
 
   let mapContainer = $state<HTMLDivElement>();
   let childMap = $state<SVGSVGElement>();
@@ -32,20 +30,19 @@
 
   $effect(() => {
     return () => {
-      ws.close();
+      getWebsocketClient().close();
     };
   });
 
-  ws.onmessage = (event) => {
-    const data: MessageType = JSON.parse(event.data);
-    if (data.title !== "worldTime") {
-      return;
-    }
-    // Base64 디코딩
-    const decodedDate = atob(data.body); // atob는 Base64 디코딩을 하는 함수
+  $effect(() => {
+    const intervalId = setInterval(() => {
+      updateWorldTime();
+    }, 1000);
 
-    setWorldTime(decodedDate);
-  };
+    return () => {
+      clearInterval(intervalId);
+    };
+  });
 
   const updateCellInfoFn = (newInfo: CurrentCellInfoType) => {
     currentCellInfo = newInfo;
@@ -63,7 +60,7 @@
   onmouseleave={onMouseLeave}
   onkeyup={onKeyUp}
 >
-  <MyInfo myRealmId={$myRealmIdStored} worldTime={getWorldTime()} />
+  <MyInfo worldTime={getWorldTime()} />
   <StationedTroops cellInfo={currentCellInfo} />
   <div class="map_container" bind:this={mapContainer}>
     <Map
@@ -75,7 +72,7 @@
     />
   </div>
   <RegionInfo
-    myRealmId={$myRealmIdStored}
+    mapNode={childMap}
     cellInfo={currentCellInfo}
     {updateCellInfoFn}
     worldTime={getWorldTime()}

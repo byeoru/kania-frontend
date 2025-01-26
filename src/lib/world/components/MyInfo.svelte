@@ -1,13 +1,11 @@
 <script lang="ts">
-  const {
-    myRealmId,
-    worldTime,
-  }: { myRealmId: number | undefined; worldTime: string | undefined } =
-    $props();
+  import { getMyRealmIdCount } from "../../shared.svelte";
+
+  let { worldTime }: { worldTime: Date | undefined } = $props();
 
   const formattedDate = $derived(
     worldTime
-      ? new Date(worldTime).toLocaleString("ko-kr", {
+      ? worldTime.toLocaleString("ko-kr", {
           timeZone: "UTC", // UTC 시간대로 설정
           year: "numeric",
           month: "2-digit",
@@ -20,7 +18,7 @@
 </script>
 
 <div class="my_info_container">
-  {#if myRealmId}
+  {#if getMyRealmIdCount() > 0}
     <section class="my_realm_info">
       <div class="realm_emblem">국기</div>
       <div class="my_info"></div>

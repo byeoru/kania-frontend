@@ -3,16 +3,10 @@ import type {
   EstablishRealmRequestType,
   EstablishRealmResponseType,
   ExcuteCensusRequestType,
-  GetMeAndOthersReamsType,
 } from "../../../model/realm";
 import type { ApiResponseType } from "../../../model/response";
 
 export const realmApi = {
-  async getMeAndTheOthersRealms() {
-    return await baseAxios.get<GetMeAndOthersReamsType>("/realms", {
-      withCredentials: true,
-    });
-  },
   async establishRealm(arg: EstablishRealmRequestType) {
     return await baseAxios.post<EstablishRealmResponseType>(
       "/realms",

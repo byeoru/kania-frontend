@@ -1,4 +1,4 @@
-import type { RealmMemberIDsType } from "./realm_member";
+import type { LevyAffiliationType } from "./realm_member";
 import type { ApiResponseType } from "./response";
 
 export type LevyRequestType = {
@@ -21,13 +21,12 @@ export type LevyType = {
   lancers: number;
   supply_troop: number;
   movement_speed: number;
-  offensive_strength: number;
-  defensive_strength: number;
+  stationed: boolean;
 };
 
 export interface LevyResponseType extends ApiResponseType {
   levy: LevyType;
   state_coffers: number;
   population: number;
-  realm_member_ids: RealmMemberIDsType;
+  Levy_affiliation: LevyAffiliationType;
 }

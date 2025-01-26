@@ -1,10 +1,9 @@
 <script lang="ts">
   import { HttpStatusCode } from "axios";
   import { type ProvinceClass } from "../../../../dataTypes/packCellsType";
-  import { getPoliticalEntitySetKr } from "../../../../utils";
   import {
+    addMyRealmId,
     internalAffairs,
-    myRealmIdStored,
     myRealmPopulationStored,
     realmInfoMapStored,
     sectorRealmMapStored,
@@ -20,14 +19,11 @@
   let {
     currentCellInfo,
     updateCellInfoFn,
-    worldTime,
-    mapNode,
+    svgLayer,
   }: {
     currentCellInfo: CurrentCellInfoType;
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
-    worldTime: string;
-    mapNode: SVGSVGElement;
-    dialog: HTMLDialogElement;
+    svgLayer: SVGSVGElement;
   } = $props();
 </script>
 
@@ -42,7 +38,7 @@
       !currentCellInfo ||
       !currentCellInfo.i ||
       !currentCellInfo.provinceId ||
-      !worldTime
+      !svgLayer
     ) {
       // error handle
       return;
@@ -54,60 +50,58 @@
       cell_number: currentCellInfo.i,
       province_number: currentCellInfo.provinceId,
       realm_color: realmColor.value,
-      init_date: worldTime,
       population: currentCellInfo.population,
     });
-    if (res.status === HttpStatusCode.Ok) {
-      worldMetadata.fillRealm([i], `0x${hexColor}`);
-      const capitalGroup = select(mapNode!).select("#capitals");
-      if (!capitalGroup) {
-        alert("올바르지 않은 svg입니다.");
-        return;
-      }
-      const {
-        my_realm: {
+
+    switch (res.status) {
+      case HttpStatusCode.Ok:
+        worldMetadata.fillRealm([i], `0x${hexColor}`);
+        const capitalGroup = select(svgLayer!).select("#capitals");
+        if (!capitalGroup) {
+          alert("올바르지 않은 svg입니다.");
+          return;
+        }
+        const {
+          my_realm: {
+            id,
+            name,
+            owner_nickname,
+            capitals,
+            political_entity,
+            color,
+            population_growth_rate,
+            state_coffers,
+            census_at,
+            tax_collection_at,
+          },
+        } = res.data;
+        sectorRealmMapStored.set(i, id);
+        myRealmPopulationStored.set(i, currentCellInfo.population);
+        realmInfoMapStored.set(id, {
           id,
           name,
           owner_nickname,
-          capital_number,
+          capitals,
           political_entity,
           color,
-          population_growth_rate,
-          state_coffers,
-          census_at,
-          tax_collection_at,
-        },
-      } = res.data;
-      sectorRealmMapStored.set(i, id);
-      myRealmPopulationStored.set(i, currentCellInfo.population);
-      realmInfoMapStored.set(id, {
-        id,
-        name,
-        owner_nickname,
-        capital_number,
-        political_entity,
-        color,
-      });
-      // 내정 정보 업데이트
-      internalAffairs.populationGrowthRate = population_growth_rate;
-      internalAffairs.stateCoffers = state_coffers;
-      internalAffairs.censusAt = census_at;
-      internalAffairs.taxCollectionAt = tax_collection_at;
-      $myRealmIdStored = id;
-      updateCellInfoFn({
-        ...currentCellInfo,
-        population: currentCellInfo.population,
-      });
-      // document.querySelector(".population")!.innerHTML =
-      //   currentCellInfo.population.toString();
-      document.querySelector(".country_name")!.innerHTML = name;
-      const { politicalEntity, status } =
-        getPoliticalEntitySetKr(political_entity);
-      document.querySelector(".political_entity")!.innerHTML = politicalEntity;
-      document.querySelector(".status")!.innerHTML = status;
-      worldMetadata.drawCapital(i, id, capitalGroup);
-      $showModal = false;
-      setMapInteractionMode("NORMAL");
+        });
+        // 내정 정보 업데이트
+        internalAffairs.populationGrowthRate = population_growth_rate;
+        internalAffairs.stateCoffers = state_coffers;
+        internalAffairs.censusAt = census_at;
+        internalAffairs.taxCollectionAt = tax_collection_at;
+        addMyRealmId(id);
+        updateCellInfoFn({
+          ...currentCellInfo,
+          population: currentCellInfo.population,
+        });
+        worldMetadata.drawCapitals(capitals, id, capitalGroup);
+        $showModal = false;
+        setMapInteractionMode("NORMAL");
+        break;
+      default:
+        alert(res.data.api_response.errorCode);
+        break;
     }
   }}
 >

@@ -13,10 +13,12 @@
   import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
   import { HttpStatusCode } from "axios";
   import {
+    addMyRealmId,
     getMapInteractionMode,
-    myRealmIdStored,
+    getMyRealmIdCount,
+    initStandardRealTime,
+    initStandardWorldTime,
     myRealmLeviesStored,
-    myRealmPopulationStored,
     realmInfoMapStored,
     sectorRealmMapStored,
     setMapInteractionMode,
@@ -24,6 +26,7 @@
   } from "../../shared.svelte";
   import { select, xml, type BaseType, type Selection } from "d3";
   import { realmMemberApi } from "../api/realm_member";
+  import type { MyRealmType } from "../../../model/realm";
 
   let {
     mapContainer,
@@ -39,29 +42,14 @@
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
   } = $props();
 
-  let mapLayer = $state<HTMLCanvasElement>();
+  let mapLayerCanvas = $state<HTMLCanvasElement>();
+  let mapLayerSVG = $state<SVGSVGElement>();
 
   // map(svg) 조정, handler setting
   $effect(() => {
     if (!mapContainer || !mapNode) {
       return;
     }
-
-    // map에 capital group 추가
-    select(mapNode).append("g").attr("id", "capitals");
-    // map에 unit flag group 추가
-    select(mapNode).append("g").attr("id", "unit_flags");
-
-    // map defs에 unit flag group defs 추가
-    const unitFlagsGroup = select(mapNode)
-      .select("defs")
-      .append("g")
-      .attr("id", "unit_flags_defs");
-
-    xml("/assets/img/defense_ribbon_h.svg").then((data) => {
-      const importedSVG = data.documentElement;
-      unitFlagsGroup.node()?.append(importedSVG);
-    });
 
     worldMetadata.prepareCellsBorder();
 
@@ -87,12 +75,15 @@
     }
   });
 
-  // map layer(canvas) init
+  // map layer(svg, canvas) init
   $effect(() => {
-    if (!mapLayer) return;
-    mapLayerInit(mapLayer);
+    if (!mapContainer || !mapLayerCanvas || !mapLayerSVG) {
+      return;
+    }
+    mapLayerInit(mapLayerCanvas, mapLayerSVG);
   });
 
+  // map interaction mode(game mode) controll
   $effect(() => {
     switch (getMapInteractionMode()) {
       case "NORMAL":
@@ -108,26 +99,28 @@
         worldMetadata.removeOneCell();
         if (!currentCellInfo) {
           alert("지역 데이터가 없습니다.");
+          setMapInteractionMode("NORMAL");
           break;
         }
-        worldMetadata.fillStrokeNearCells(currentCellInfo.i);
+        worldMetadata.fillStrokeNearLandCells(currentCellInfo.i);
         break;
     }
   });
 
-  const loadMap = async (path: string) => {
+  const loadSVG = async (path: string) => {
     const res = await fetch(path);
     const svgContent = await res.text();
     return svgContent;
   };
 
-  const mapInit = async () => {
+  const GetContentsOfSVG = async () => {
     await worldMetadata.loadMetadata();
     worldMetadata.createQuadtree();
 
-    const mapHtml = await loadMap("assets/map/kania_.svg");
-    const svgContents = getInsideTag(mapHtml, "svg");
-    return svgContents;
+    const mapHtml = await loadSVG("assets/map/kania_.svg");
+    const backgroundContents = getInsideTag(mapHtml, "svg");
+    const layerContents = await loadSVG("assets/map/kania_layer.svg");
+    return { backgroundContents, layerContents };
   };
 
   function getInsideTag(html: string, tagName: string) {
@@ -163,78 +156,77 @@
     worldMetadata.mapLayerStage = app.stage;
   }
 
-  async function callApiForDrawRealm() {
-    const res = await realmApi.getMeAndTheOthersRealms();
+  async function callApiForDrawRealm(svgLayer: SVGSVGElement): Promise<number> {
+    const res = await realmMemberApi.getMeAndTheOthersRealms();
     switch (res.status) {
       case HttpStatusCode.Ok:
-        const capitalGroup = select(mapNode!).select("#capitals");
+        const capitalGroup = select(svgLayer).select("#capitals");
         if (!capitalGroup) {
           alert("올바르지 않은 svg입니다.");
-          return;
+          return 0;
         }
-        const {
-          my_realm: {
+        const { standard_times, my_realm, the_others_realms } = res.data;
+
+        // 기준 시간 저장
+        initStandardWorldTime(standard_times.standard_world_time);
+        initStandardRealTime(standard_times.standard_real_time);
+
+        // 다른 세력 sector info 저장
+        the_others_realms.forEach((realm) => {
+          realmInfoMapStored.set(realm.id, {
+            id: realm.id,
+            name: realm.name,
+            owner_nickname: realm.owner_nickname,
+            capitals: realm.capitals,
+            political_entity: realm.political_entity,
+            color: realm.color,
+          });
+          // 다른 세력 sector id 저장
+          const sectors = realm.realm_cells_json.RawMessage;
+          const values = Object.values(sectors);
+          for (const sector of values) {
+            sectorRealmMapStored.set(sector, realm.id);
+          }
+
+          // draw the others realms
+          worldMetadata.fillRealm(values, `0x${realm.color}`);
+          worldMetadata.drawCapitals(realm.capitals, realm.id, capitalGroup);
+        });
+
+        if (!my_realm) {
+          setMapInteractionMode("CELL_SELECTION");
+        } else {
+          // 내 세력 정보 저장
+          const {
             id: myRealmId,
             name: myRealmName,
             owner_nickname: myNickname,
             color: myColor,
             political_entity: myPoliticalEntity,
-            capital_number: myCapitalNumber,
-            realm_cells_json: {
-              RawMessage: { cells: myCells },
-            },
-          },
-          the_others_realms,
-        } = res.data;
-        $myRealmIdStored = myRealmId;
-        // 내 세력 sector info 저장
-        realmInfoMapStored.set(myRealmId, {
-          id: myRealmId,
-          name: myRealmName,
-          owner_nickname: myNickname,
-          capital_number: myCapitalNumber,
-          political_entity: myPoliticalEntity,
-          color: myColor,
-        });
-        // 내 세력 sector id 저장
-        myCells.forEach((cellId) => {
-          sectorRealmMapStored.set(cellId, myRealmId);
-        });
-        // 다른 세력 sector info 저장
-        the_others_realms.map((realm) => {
-          realmInfoMapStored.set(realm.id, {
-            id: realm.id,
-            name: realm.name,
-            owner_nickname: realm.owner_nickname,
-            capital_number: realm.capital_number,
-            political_entity: realm.political_entity,
-            color: realm.color,
+            capitals: myCapitals,
+            realm_cells_json: { RawMessage: mySectors },
+          } = my_realm;
+          addMyRealmId(myRealmId);
+          // 내 세력 sector info 저장
+          realmInfoMapStored.set(myRealmId, {
+            id: myRealmId,
+            name: myRealmName,
+            owner_nickname: myNickname,
+            capitals: myCapitals,
+            political_entity: myPoliticalEntity,
+            color: myColor,
           });
-          // 다른 세력 sector id 저장
-          realm.realm_cells_json.RawMessage.cells.forEach((cellId) => {
-            sectorRealmMapStored.set(cellId, realm.id);
-          });
-        });
-        // draw my realm
-        worldMetadata.fillRealm(myCells, `0x${myColor}`);
-        worldMetadata.drawCapital(myCapitalNumber, myRealmId, capitalGroup);
-        // draw the others realms
-        the_others_realms.forEach((realm) => {
-          worldMetadata.fillRealm(
-            realm.realm_cells_json.RawMessage.cells,
-            `0x${realm.color}`,
-          );
-          worldMetadata.drawCapital(
-            realm.capital_number,
-            realm.id,
-            capitalGroup,
-          );
-        });
-        break;
-      case HttpStatusCode.NoContent:
-        setMapInteractionMode("CELL_SELECTION");
-        break;
+          // 내 세력 sector id 저장
+          const mySectorNumbers = Object.values(mySectors);
+          for (const sector of mySectorNumbers) {
+            sectorRealmMapStored.set(sector, myRealmId);
+          }
+          // draw my realm
+          worldMetadata.fillRealm(mySectorNumbers, `0x${myColor}`);
+          worldMetadata.drawCapitals(myCapitals, myRealmId, capitalGroup);
+        }
     }
+    return getMyRealmIdCount();
   }
 
   function drawLevies(
@@ -246,13 +238,13 @@
     }
   }
 
-  async function callApiForDrawLevies() {
-    const res = await realmMemberApi.getRealmMembersLevies();
+  async function callApiForDrawLevies(svgLayer: SVGSVGElement) {
+    const res = await realmMemberApi.getOurRealmLevies();
     switch (res.status) {
       case HttpStatusCode.Ok:
-        const unitFlagsGroup = select(mapNode!).select("#unit_flags");
-        const { realm_members } = res.data;
-        storeCellLevies(realm_members);
+        const unitFlagsGroup = select(svgLayer).select("#unit_flags");
+        const { realm_levies } = res.data;
+        storeCellLevies(realm_levies);
         drawLevies(unitFlagsGroup);
         break;
       case HttpStatusCode.NotFound:
@@ -261,18 +253,49 @@
     }
   }
 
-  async function mapLayerInit(canvas: HTMLCanvasElement) {
-    await pixiInit(canvas);
-    await callApiForDrawRealm();
-    if ($myRealmIdStored) {
-      await callApiForDrawLevies();
+  async function mapLayerInit(
+    canvasLayer: HTMLCanvasElement,
+    mapLayerSVG: SVGSVGElement,
+  ) {
+    await pixiInit(canvasLayer);
+    // layer svg element init
+    mapLayerSVGInit(mapLayerSVG);
+    // data fetch and draw(svg, canvas)
+    mapLayerDataInit(mapLayerSVG);
+  }
+
+  function mapLayerSVGInit(mapLayerSVG: SVGSVGElement) {
+    // layersvg에 capital group 추가
+    select(mapLayerSVG).append("g").attr("id", "capitals");
+    // layersvg에 unit flag group 추가
+    select(mapLayerSVG).append("g").attr("id", "unit_flags");
+    // layersvg에 unit advance road group 추가
+    select(mapLayerSVG).append("g").attr("id", "unit_advance_roads");
+    // layersvg에 defs 추가
+    select(mapLayerSVG).append("defs");
+    // map defs에 unit flag group defs 추가
+    const unitFlagsGroup = select(mapLayerSVG)
+      .select("defs")
+      .append("g")
+      .attr("id", "unit_flags_defs");
+
+    xml("/assets/img/defense_ribbon_h.svg").then((data) => {
+      const importedSVG = data.documentElement;
+      unitFlagsGroup.node()?.append(importedSVG);
+    });
+  }
+
+  async function mapLayerDataInit(svgLayer: SVGSVGElement) {
+    const myRealmIdCount = await callApiForDrawRealm(svgLayer);
+    if (myRealmIdCount > 0) {
+      await callApiForDrawLevies(svgLayer);
     }
   }
 </script>
 
-{#await mapInit()}
+{#await GetContentsOfSVG()}
   <Loading description="데이터를 불러오는 중입니다" />
-{:then mapContents}
+{:then contents}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -282,7 +305,7 @@
       onClick(
         event,
         mapNode,
-        $myRealmIdStored,
+        mapLayerSVG,
         updateCellInfoFn,
         currentCellInfo,
         getMapInteractionMode(),
@@ -298,7 +321,18 @@
     onwheel={(event) => onWheel(event, mapContainer, mapGroup)}
     onmousedown={onMouseDown}
   >
-    <canvas id="map-layer" bind:this={mapLayer}></canvas>
+    <svg
+      id="map-layer-svg"
+      bind:this={mapLayerSVG}
+      width={worldMetadata.mapWidth}
+      height={worldMetadata.mapHeight}
+      version="1.1"
+      xmlns="http://www.w3.org/2000/svg"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+    >
+      {@html contents.layerContents}
+    </svg>
+    <canvas id="map-layer-canvas" bind:this={mapLayerCanvas}></canvas>
     <svg
       id="world-map"
       bind:this={mapNode}
@@ -308,22 +342,26 @@
       xmlns="http://www.w3.org/2000/svg"
       xmlns:xlink="http://www.w3.org/1999/xlink"
     >
-      {@html mapContents}
+      {@html contents.backgroundContents}
     </svg>
   </div>
 {/await}
 
 <style>
   #world-map {
-    position: absolute;
     z-index: 1;
+    position: absolute;
   }
   #map-group {
     width: 7680px;
     height: 4320px;
+    z-index: 4;
+  }
+  #map-layer-svg {
+    position: absolute;
     z-index: 3;
   }
-  #map-layer {
+  #map-layer-canvas {
     z-index: 2;
     position: absolute;
   }

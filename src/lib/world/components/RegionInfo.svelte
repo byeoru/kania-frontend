@@ -1,8 +1,15 @@
 <script lang="ts">
-  import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
-  import type { ProvinceClass } from "../../../dataTypes/packCellsType";
-  import { openModal } from "../../../utils";
   import {
+    getPoliticalEntityKr,
+    type CurrentCellInfoType,
+  } from "../../../dataTypes/aboutUiType";
+  import type {
+    FeatureClass,
+    ProvinceClass,
+  } from "../../../dataTypes/packCellsType";
+  import { getElevation, openModal } from "../../../utils";
+  import {
+    isMyRealmId,
     realmInfoMapStored,
     sectorRealmMapStored,
   } from "../../shared.svelte";
@@ -11,18 +18,18 @@
   import Muster from "./modal/Muster.svelte";
 
   const {
+    mapNode,
     cellInfo,
     updateCellInfoFn,
     worldTime,
-    myRealmId,
   }: {
+    mapNode: SVGSVGElement | undefined;
     cellInfo: CurrentCellInfoType | undefined;
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
-    worldTime: string | undefined;
-    myRealmId: number | undefined;
+    worldTime: Date | undefined;
   } = $props();
 
-  let getRealmInfo = $derived(() => {
+  let realm = $derived.by(() => {
     if (!cellInfo?.i) return;
     const selectedRealmId = sectorRealmMapStored.get(cellInfo.i);
     if (selectedRealmId) {
@@ -36,62 +43,22 @@
       realmInfo: undefined,
     };
   });
-  let countryName = $derived(() => {
-    const info = getRealmInfo();
-    if (info?.selectedRealmId) {
-      return info.realmInfo?.name ?? "없음";
+  let countryName = $derived.by(() => {
+    if (realm?.selectedRealmId) {
+      return realm.realmInfo?.name ?? "없음";
     }
     return "없음";
   });
-  let politicalEntitySet = $derived(() => {
-    const info = getRealmInfo();
-    if (info?.selectedRealmId) {
-      switch (info?.realmInfo?.political_entity) {
-        case "Tribe":
-          return {
-            politicalEntity: "부족국가",
-            status: "추장",
-          };
-        case "TribalConfederation":
-          return {
-            politicalEntity: "부족 연맹",
-            status: "대추장",
-          };
-        case "Kingdom":
-          return {
-            politicalEntity: "왕국",
-            status: "왕",
-          };
-        case "KingdomConfederation":
-          return {
-            politicalEntity: "왕국 연맹",
-            status: "대왕",
-          };
-        case "Empire":
-          return {
-            politicalEntity: "제국",
-            status: "황제",
-          };
-        case "FeudatoryState":
-          return {
-            politicalEntity: "번국",
-            status: "번왕",
-          };
-      }
-    }
-    return {
-      politicalEntity: "없음",
-      status: "없음",
-    };
+  let politicalEntitySet = $derived.by(() => {
+    return getPoliticalEntityKr(realm?.realmInfo?.political_entity ?? "");
   });
-  let monarch = $derived(() => {
-    const info = getRealmInfo();
-    if (info?.selectedRealmId) {
-      return info.realmInfo?.owner_nickname ?? "없음";
+  let monarch = $derived.by(() => {
+    if (realm?.selectedRealmId) {
+      return realm.realmInfo?.owner_nickname ?? "없음";
     }
     return "없음";
   });
-  let provinceName = $derived(() => {
+  let provinceName = $derived.by(() => {
     if (cellInfo?.provinceId) {
       return (
         worldMetadata.pack!.cells.provinces[
@@ -101,23 +68,28 @@
     }
     return "정보 없음";
   });
-  let elevation = $derived(() => {
-    getRealmInfo();
-    return cellInfo?.elevation.toString() ?? "정보 없음";
-  });
-
-  $effect(() => {
-    // console.log(myRealmPopulationStored.get(18114));
+  let elevation = $derived.by(() => {
+    if (!cellInfo) return "정보 없음";
+    const feature = worldMetadata.pack!.cells.features[
+      worldMetadata.pack!.cells.cells.f[cellInfo.i]
+    ] as FeatureClass;
+    const elevation = getElevation(feature, cellInfo.elevation);
+    return elevation;
   });
 
   async function onCensusClick() {
     if (!worldTime) return;
-    await realmApi.excuteCensus({ current_date: worldTime });
+    // await realmApi.excuteCensus({ current_date: worldTime });
   }
 
   async function onMusterClick() {
     if (!worldTime) return;
+    if (!mapNode) {
+      alert("아직 지도가 초기화되지 않았습니다.");
+      return;
+    }
     openModal("부대 창설", Muster, {
+      mapNode,
       currentCellInfo: cellInfo,
       updateCellInfoFn,
     });
@@ -132,74 +104,115 @@
   <div class="region_info_title">
     <div class="region_info_title_icon"></div>
   </div>
-  <section class="country_info">
-    <span class="section_header"
-      ><span class="section_header_icon"></span>통치 세력</span
-    >
-    <div class="section_item">
-      <span class="item_title">국명</span>
-      <span class="item_content country_name">{countryName()}</span>
-    </div>
-    <div class="section_item">
-      <span class="item_title">정치 체제</span>
-      <span class="item_content political_entity"
-        >{politicalEntitySet().politicalEntity}</span
+  {#if cellInfo}
+    <section class="country_info">
+      <span class="section_header"
+        ><span class="section_header_icon"></span>통치 세력</span
       >
-    </div>
-    <div class="section_item">
-      <span class="item_title">통치자</span>
-      <span class="item_content monarch">{monarch()}</span>
+      {#if realm?.selectedRealmId}
+        <div class="section_item">
+          <span class="item_title">국명</span>
+          <span class="item_content country_name">{countryName}</span>
+        </div>
+        <div class="section_item">
+          <span class="item_title">정치 체제</span>
+          <span class="item_content political_entity"
+            >{politicalEntitySet.politicalEntity}</span
+          >
+        </div>
+        <div class="section_item">
+          <span class="item_title">통치자</span>
+          <span class="item_content monarch">{monarch}</span>
+          <div class="section_item">
+            <span class="item_title">지위</span>
+            <span class="item_content status">{politicalEntitySet.status}</span>
+          </div>
+        </div>
+      {:else if cellInfo.type === "island"}
+        <div class="section_item">
+          <span class="item_content monarch">토착세력</span>
+        </div>
+      {/if}
+    </section>
+    <section class="province_info">
+      <span class="section_header"
+        ><span class="section_header_icon"></span>주(州)</span
+      >
+      {#if cellInfo.type === "island"}
+        <div class="section_item">
+          <span class="item_content">{provinceName}</span>
+        </div>
+      {/if}
+    </section>
+    <section class="sector_info">
+      <span class="section_header"
+        ><span class="section_header_icon"></span>군(郡)</span
+      >
+      {#if cellInfo.type === "island"}
+        <div class="section_item">
+          <span class="item_title">군명</span>
+          <span class="item_content">{`${provinceName}-${cellInfo.i}`}</span>
+        </div>
+      {/if}
+      {#if cellInfo.type === "island" && (isMyRealmId(sectorRealmMapStored.get(cellInfo.i)) || !sectorRealmMapStored.has(cellInfo.i))}
+        <div class="section_item">
+          <span class="item_title">인구</span>
+          <span class="item_content population">{cellInfo.population}</span>
+        </div>
+      {/if}
       <div class="section_item">
-        <span class="item_title">지위</span>
-        <span class="item_content status">{politicalEntitySet().status}</span>
-      </div>
-    </div>
-  </section>
-  <section class="province_info">
-    <span class="section_header"
-      ><span class="section_header_icon"></span>주(州)</span
-    >
-    <div class="section_item">
-      <span class="item_content">{provinceName()}</span>
-    </div>
-  </section>
-  <section class="sector_info">
-    <span class="section_header"
-      ><span class="section_header_icon"></span>군(郡)</span
-    >
-    {#if cellInfo && (sectorRealmMapStored.get(cellInfo.i) === myRealmId || !sectorRealmMapStored.has(cellInfo.i))}
-      <div class="section_item">
-        <span class="item_title">인구</span>
-        <span class="item_content population">{cellInfo.population}</span>
-      </div>
-    {/if}
-    <div class="section_item">
-      <span class="item_title">고도</span>
-      <span class="item_content">{elevation()}</span>
-    </div>
-  </section>
-  {#if cellInfo?.i && myRealmId && sectorRealmMapStored.get(cellInfo.i) === myRealmId}
-    <section class="internal_affairs">
-      <div class="internal_affairs_header">내정</div>
-      <div class="section_item">
-        <button class="census_btn" onclick={onCensusClick}
-          ><div class="icon"></div>
-          인구조사</button
-        >
-      </div>
-      <div class="section_item">
-        <button class="tax_collection_btn"
-          ><div class="icon"></div>
-          세금 징수</button
-        >
-      </div>
-      <div class="section_item">
-        <button class="muster_btn" onclick={onMusterClick}
-          ><div class="icon"></div>
-          부대 창설</button
-        >
+        <span class="item_title">고도</span>
+        <span class="item_content">{elevation}</span>
       </div>
     </section>
+    {#if cellInfo.indigenousUnit}
+      <section class="indigenous_unit_info">
+        <span class="section_header"
+          ><span class="section_header_icon"></span>향군(鄕軍)</span
+        >
+        <div class="section_item">
+          <span class="item_title">검병</span>
+          <span class="item_content swordmen"
+            >{cellInfo.indigenousUnit.swordmen}</span
+          >
+        </div>
+        <div class="section_item">
+          <span class="item_title">궁병</span>
+          <span class="item_content archers"
+            >{cellInfo.indigenousUnit.archers}</span
+          >
+        </div>
+        <div class="section_item">
+          <span class="item_title">창기병</span>
+          <span class="item_content lancers"
+            >{cellInfo.indigenousUnit.lancers}</span
+          >
+        </div>
+      </section>
+    {/if}
+    {#if cellInfo.i && isMyRealmId(sectorRealmMapStored.get(cellInfo.i))}
+      <section class="internal_affairs">
+        <div class="internal_affairs_header">내정</div>
+        <div class="section_item">
+          <button class="census_btn" onclick={onCensusClick}
+            ><div class="icon"></div>
+            인구조사</button
+          >
+        </div>
+        <div class="section_item">
+          <button class="tax_collection_btn"
+            ><div class="icon"></div>
+            세금 징수</button
+          >
+        </div>
+        <div class="section_item">
+          <button class="muster_btn" onclick={onMusterClick}
+            ><div class="icon"></div>
+            부대 창설</button
+          >
+        </div>
+      </section>
+    {/if}
   {/if}
 </div>
 
@@ -210,11 +223,12 @@
     background-color: #f04c00;
     z-index: 3;
     overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     position: relative;
     flex-direction: column;
     justify-content: start;
-    align-items: center;
+    align-items: start;
     background-image: url("/assets/img/carving.png");
     background-size: 100% 100%;
   }
@@ -279,11 +293,11 @@
   }
 
   section {
-    width: 100%;
+    width: 96%;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding-left: 0.5em;
+    margin-left: 0.2em;
     margin-bottom: 1em;
   }
 
@@ -301,7 +315,7 @@
     font-size: 1em;
     font-weight: bold;
     background-image: url("/assets/img/form.png");
-    background-size: 95% 100%;
+    background-size: 100% 100%;
     background-repeat: no-repeat;
     display: flex;
     align-items: center;

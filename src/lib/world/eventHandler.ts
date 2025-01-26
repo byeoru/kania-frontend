@@ -11,14 +11,17 @@ import { mapInteraction } from "./mapInteraction.ts";
 import { worldMetadata } from "./worldMetadata.ts";
 import type { FeatureClass } from "../../dataTypes/packCellsType.ts";
 import {
-  attackLevyInfo,
-  getWorldTime,
+  attackLevyInfoStored,
+  isMyRealmId,
   myRealmPopulationStored,
   sectorRealmMapStored,
 } from "../shared.svelte.ts";
 import { sectorApi } from "./api/sector.ts";
 import CreateRealm from "./components/modal/CreateRealm.svelte";
 import Attack from "./components/modal/Attack.svelte";
+import { indigenousUnitApi } from "./api/indigenous_unit.ts";
+import { HttpStatusCode } from "axios";
+import type { IndigenousUnitType } from "../../model/indigenous_unit.ts";
 
 export function onWheel(
   event: WheelEvent,
@@ -85,21 +88,21 @@ export function onWheel(
 export async function onClick(
   event: MouseEvent,
   map: SVGSVGElement | undefined,
-  myRealmId: number | undefined,
+  svgLayer: SVGSVGElement | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
   latestCellInfo: CurrentCellInfoType | undefined,
   gameModeType: GameModeType,
 ) {
-  if (!map) {
+  if (!map || !svgLayer) {
     return;
   }
 
   switch (gameModeType) {
     case "NORMAL":
-      await clickNormal(event, map, myRealmId, updateCellInfoFn);
+      await clickNormal(event, map, latestCellInfo, updateCellInfoFn);
       break;
     case "CELL_SELECTION":
-      clickCellSection(event, map, latestCellInfo, updateCellInfoFn);
+      clickCellSection(event, map, svgLayer, latestCellInfo, updateCellInfoFn);
       break;
     case "ATTACK":
       clickAttack(event, map);
@@ -109,24 +112,43 @@ export async function onClick(
 
 function clickAttack(event: MouseEvent, map: SVGSVGElement) {
   const { x, y } = getLocalSvgCoordinates(event, map);
-  const i = worldMetadata.findCell(x, y); // pack cell id
-  if (!i) {
+  const targetSector = worldMetadata.findCell(x, y); // pack cell id
+
+  if (!targetSector) {
     return;
   }
-  if (!attackLevyInfo) {
+  if (!attackLevyInfoStored) {
     alert("공격 부대에 대한 정보가 없습니다.");
     return;
   }
-  const nearCells =
-    worldMetadata.pack!.cells.cells.c[attackLevyInfo.encampment];
-  if (nearCells.find((cell) => cell === i)) {
-    openModal("공격", Attack);
+  const isRealmSector = sectorRealmMapStored.has(targetSector);
+  if (isRealmSector && isMyRealmId(sectorRealmMapStored.get(targetSector))) {
+    return;
+  }
+
+  const nearLands = worldMetadata.pack!.cells.cells.c[
+    attackLevyInfoStored.encampment
+  ].filter((i) => {
+    const feature = worldMetadata.pack!.cells.features[
+      worldMetadata.pack!.cells.cells.f[i]
+    ] as FeatureClass;
+    return feature.land;
+  });
+  if (nearLands.find((cell) => cell === targetSector)) {
+    openModal("출병", Attack, {
+      levyId: attackLevyInfoStored.levyId,
+      attackActionData: {
+        originSector: attackLevyInfoStored.encampment,
+        targetSector: targetSector,
+      },
+    });
   }
 }
 
 function clickCellSection(
   event: MouseEvent,
   map: SVGSVGElement,
+  svgLayer: SVGSVGElement,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
@@ -142,12 +164,15 @@ function clickCellSection(
   const population = worldMetadata.pack!.cells.cells.pop[i];
   const elevation = worldMetadata.pack!.cells.cells.h[i];
   const provinceId = worldMetadata.findProvince(i);
-  if (provinceId && latestCellInfo?.provinceId === provinceId) {
+  if (
+    provinceId &&
+    latestCellInfo?.provinceId === provinceId &&
+    !sectorRealmMapStored.has(i)
+  ) {
     openModal("생성", CreateRealm, {
       currentCellInfo: latestCellInfo,
       updateCellInfoFn,
-      worldTime: getWorldTime(),
-      mapNode: map,
+      svgLayer,
     });
   }
 
@@ -160,6 +185,7 @@ function clickCellSection(
     population,
     elevation,
     biome: "",
+    indigenousUnit: null,
   };
   updateCellInfoFn(newInfo);
   if (provinceId) {
@@ -170,11 +196,9 @@ function clickCellSection(
 async function clickNormal(
   event: MouseEvent,
   map: SVGSVGElement,
-  myRealmId: number | undefined,
+  latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
-  worldMetadata.removeSelectedSectors();
-  worldMetadata.removeOneCell();
   const { x, y } = getLocalSvgCoordinates(event, map);
   const i = worldMetadata.findCell(x, y); // pack cell id
   if (!i) {
@@ -189,13 +213,22 @@ async function clickNormal(
   const clickedRealmId = sectorRealmMapStored.get(i);
 
   let population = 0;
-  // stored 조회
-  if (myRealmPopulationStored.has(i)) {
-    population = myRealmPopulationStored.get(i)!;
-  } else {
-    // api 호출
-    population = await getPopulation(i, clickedRealmId);
-    myRealmPopulationStored.set(i, population);
+  let indigenousUnit: IndigenousUnitType | null = null;
+
+  // 육지일 경우
+  if (feature.land) {
+    if (!clickedRealmId) {
+      // 토착 군 세력 api 조회
+      indigenousUnit = await getIndigenousUnit(i);
+    }
+    // stored 인구 조회
+    if (myRealmPopulationStored.has(i)) {
+      population = myRealmPopulationStored.get(i)!;
+    } else {
+      // call api or json 조회
+      population = await getPopulation(i, clickedRealmId);
+      myRealmPopulationStored.set(i, population);
+    }
   }
 
   const newInfo: CurrentCellInfoType = {
@@ -207,21 +240,50 @@ async function clickNormal(
     population,
     elevation,
     biome: "",
+    indigenousUnit,
   };
+
   updateCellInfoFn(newInfo);
-  if (provinceId && !sectorRealmMapStored.has(i)) {
-    worldMetadata.fillSelectedSectors(
-      worldMetadata.provinceCells[provinceId],
-      "0xC8B4A0",
-      "0x8C8C8C",
-    );
-    worldMetadata.fillOneCell(i, "0x993800");
+
+  // 이전과 다른 province를 클릭 or 처음 클릭
+  if (!feature.land) {
+    worldMetadata.removeOneCell();
+    worldMetadata.removeSelectedSectors();
+  } else if (provinceId && provinceId !== latestCellInfo?.provinceId) {
+    worldMetadata.removeOneCell();
+    worldMetadata.removeSelectedSectors();
+    if (!sectorRealmMapStored.has(i)) {
+      worldMetadata.fillSelectedSectors(
+        worldMetadata.provinceCells[provinceId],
+        "0xC8B4A0",
+        "0x8C8C8C",
+      );
+      worldMetadata.fillOneCell(i, "0x993800");
+    }
+  } else if (provinceId && latestCellInfo) {
+    // 같은 province를 클릭
+    worldMetadata.removeOneCell();
+    if (!sectorRealmMapStored.has(i)) {
+      worldMetadata.fillOneCell(i, "0x993800");
+      // 이전 클릭이 주인있는 영토인경우 fill province
+      worldMetadata.tempProvinceFillGraphics;
+      if (sectorRealmMapStored.has(latestCellInfo.i)) {
+        worldMetadata.fillSelectedSectors(
+          worldMetadata.provinceCells[provinceId],
+          "0xC8B4A0",
+          "0x8C8C8C",
+        );
+      }
+    } else {
+      worldMetadata.removeSelectedSectors();
+    }
   }
+
   async function getPopulation(i: number, clickedRealmId: number | undefined) {
     // 점령된 영토일 경우
     if (clickedRealmId) {
       // 내 영토일 경우
-      if (myRealmId && clickedRealmId === myRealmId) {
+      if (isMyRealmId(clickedRealmId)) {
         const res = await sectorApi.getPopulation({ cell_number: i });
         if (res.status === 200) {
           return res.data.population;
@@ -232,6 +294,16 @@ async function clickNormal(
       return 0;
     }
     return worldMetadata.pack!.cells.cells.pop[i];
+  }
+  async function getIndigenousUnit(i: number) {
+    const res = await indigenousUnitApi.getIndigenousUnit(i);
+    switch (res.status) {
+      case HttpStatusCode.Ok:
+        return res.data.indigenous_unit;
+      default:
+        alert(res.data.api_response.description);
+        return null;
+    }
   }
 }
 
@@ -326,16 +398,18 @@ export function onMouseMoveMetadata(
     population,
     elevation,
     biome: "",
+    indigenousUnit: null,
   };
   if (feature.land && provinceId === latestCellInfo.provinceId) {
-    if (i !== latestCellInfo.i) {
+    if (i !== latestCellInfo.i && !sectorRealmMapStored.has(i)) {
       worldMetadata.removeOneCell();
       worldMetadata.fillOneCell(i, "0x993800");
+      updateCellInfoFn(newInfo);
     }
   } else {
     worldMetadata.removeOneCell();
+    worldMetadata.removeSelectedSectors();
   }
-  updateCellInfoFn(newInfo);
 }
 
 export function onKeyUp(event: KeyboardEvent) {

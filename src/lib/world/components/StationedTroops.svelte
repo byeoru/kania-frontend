@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
+  import {
+    type CurrentCellInfoType,
+    type LeviesStoredType,
+  } from "../../../dataTypes/aboutUiType";
   import { myRealmLeviesStored } from "../../shared.svelte";
   import LevyInfo from "./LevyInfo.svelte";
 
@@ -8,21 +11,23 @@
   }: {
     cellInfo: CurrentCellInfoType | undefined;
   } = $props();
-  const levies = $derived(
-    cellInfo ? myRealmLeviesStored.get(cellInfo.i) : undefined,
-  );
+
+  let levies = $state<LeviesStoredType[]>([]);
+
+  $effect(() => {
+    if (!cellInfo) return;
+    levies = myRealmLeviesStored.get(cellInfo.i) ?? [];
+  });
 </script>
 
-{#if levies}
-  <div class="levy_info">
-    <div class="top_border">주둔 병력</div>
-    <div class="levy_list">
-      {#each levies as levy}
-        <LevyInfo levy={levy.levy} realmMemberId={levy.realmMemberId} />
-      {/each}
-    </div>
+<div class="levy_info">
+  <div class="top_border">주둔 병력</div>
+  <div class="levy_list">
+    {#each levies as levy}
+      <LevyInfo levy={levy.levy} levyAffiliation={levy.levyAffiliation} />
+    {/each}
   </div>
-{/if}
+</div>
 
 <style>
   .levy_info {

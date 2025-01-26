@@ -1,24 +1,26 @@
 <script lang="ts">
   import type { LevyType } from "../../../model/levy";
-  import type { RealmMemberIDsType } from "../../../model/realm_member";
+  import type { LevyAffiliationType } from "../../../model/realm_member";
   import {
     setAttackLevyInfo,
     setMapInteractionMode,
   } from "../../shared.svelte";
 
   let {
-    realmMemberId,
+    levyAffiliation,
     levy,
   }: {
-    realmMemberId: RealmMemberIDsType;
+    levyAffiliation: LevyAffiliationType;
     levy: LevyType;
   } = $props();
 
   function onAttackClick() {
     setAttackLevyInfo({
-      user_id: realmMemberId.user_id,
-      realm_id: realmMemberId.realm_id,
+      rm_id: levyAffiliation.rm_id,
+      realm_id: levyAffiliation.realm_id,
+      levyId: levy.levy_id,
       encampment: levy.encampment,
+      speed: levy.movement_speed,
     });
     setMapInteractionMode("ATTACK");
   }
@@ -53,16 +55,18 @@
       </section>
     </div>
   </div>
-  <section class="levy_actions">
-    <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button onclick={onAttackClick}>
-      <div class="attack_mode_icon"></div>
-    </button>
-    <!-- svelte-ignore a11y_consider_explicit_label -->
-    <button>
-      <div class="move_mode_icon"></div>
-    </button>
-  </section>
+  {#if levy.stationed}
+    <section class="levy_actions">
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button onclick={onAttackClick}>
+        <div class="attack_mode_icon"></div>
+      </button>
+      <!-- svelte-ignore a11y_consider_explicit_label -->
+      <button>
+        <div class="move_mode_icon"></div>
+      </button>
+    </section>
+  {/if}
 </div>
 
 <style>
