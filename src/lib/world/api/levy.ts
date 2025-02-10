@@ -1,5 +1,10 @@
 import baseAxios from "../../../apiConfig";
-import type { LevyRequestType, LevyResponseType } from "../../../model/levy";
+import type {
+  FindLevyResponseType,
+  FindSectorLeviesResponseType,
+  LevyRequestType,
+  LevyResponseType,
+} from "../../../model/levy";
 
 export const levyApi = {
   async muster(arg: LevyRequestType) {
@@ -8,6 +13,21 @@ export const levyApi = {
       {
         ...arg,
       },
+      {
+        withCredentials: true,
+      },
+    );
+  },
+
+  async findLevy(levyId: number) {
+    return await baseAxios.get<FindLevyResponseType>(`/levies/${levyId}`, {
+      withCredentials: true,
+    });
+  },
+
+  async getSectorLevies(sector: number) {
+    return await baseAxios.get<FindSectorLeviesResponseType>(
+      `/levies?sector=${sector}`,
       {
         withCredentials: true,
       },

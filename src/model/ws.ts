@@ -1,12 +1,12 @@
-export type TickMessageType = {
-  title: string;
-  body: string;
+export type UpdateSectorBodyType = {
+  sector: number;
+  old_realm_id: number;
+  new_realm_id: number;
+  action_type: string;
+  action_id: number;
 };
 
-export type WSReqeustType = {
+export interface MessageType<T> {
   title: string;
-};
-
-export interface WSResponseType extends TickMessageType {
-  id: number;
+  body: T;
 }

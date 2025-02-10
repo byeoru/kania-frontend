@@ -15,14 +15,16 @@ import type {
 import type { Component } from "svelte";
 import WebSocketClient from "./websocket";
 import type { RealmLeviesResponseType } from "../model/realm_member";
+import type { LevyActionResponseType } from "../model/levy_action";
 
 export let showModal = writable<boolean>(false);
 let mapInteractionMode = $state<GameModeType>("NORMAL");
 let myRealmIdStored = new SvelteSet<number>();
+let myRmId = $state<number>();
 export let sectorRealmMapStored = new Map<SectorIdType, RealmIdType>();
 export let realmInfoMapStored = new Map<RealmIdType, RealmFeatureType>();
-export let myRealmPopulationStored = new SvelteMap<number, number>();
-const wsClient = new WebSocketClient("ws://localhost:8081");
+export const myRealmPopulationStored = new SvelteMap<number, number>();
+let wsClient: WebSocketClient | undefined;
 export let modalTitle: string = "";
 export let modalContent: Component | undefined;
 export let modalProps: {} | undefined = {};
@@ -30,11 +32,28 @@ export let internalAffairs: InternalAffairsType = {};
 let standardWorldTime: Date | undefined = undefined;
 let standardRealTime: Date | undefined = undefined;
 let worldTime = $state<Date>();
-export let myRealmLeviesStored = new SvelteMap<
+export const ourSectorLeviesStored = new SvelteMap<
   CellNumberType,
-  LeviesStoredType[]
+  Map<number, LeviesStoredType>
 >();
+export const ourRealmLevyActionsStored = new SvelteMap<
+  number,
+  LevyActionResponseType
+>();
+
 export let attackLevyInfoStored: AttackLevyInfoType | null = null;
+
+export const getMyRmId = () => {
+  return myRmId;
+};
+
+export const setMyRmId = (rmId: number) => {
+  myRmId = rmId;
+};
+
+export const initWebSocketClient = (url: string) => {
+  wsClient = new WebSocketClient(url);
+};
 
 export const isMyRealmId = (realmId: RealmIdType | undefined) => {
   if (!realmId) {
@@ -44,6 +63,11 @@ export const isMyRealmId = (realmId: RealmIdType | undefined) => {
     return true;
   }
   return false;
+};
+
+export const isMySector = (sectorNumber: number) => {
+  const realmId = sectorRealmMapStored.get(sectorNumber);
+  return realmId && isMyRealmId(realmId);
 };
 
 export const getMyRealmIdCount = () => {
@@ -96,31 +120,37 @@ export const getWorldTime = () => {
   return worldTime;
 };
 
-export function storeCellLevies(realmMembers: RealmLeviesResponseType[]) {
-  realmMembers.forEach((member) => {
-    const { levy_affiliation, levies } = member;
+export function storeCellLevies(realmLevies: RealmLeviesResponseType[]) {
+  realmLevies.forEach((levy) => {
+    const { levy_affiliation, levies } = levy;
     levies.forEach((levy) => {
-      if (myRealmLeviesStored.has(levy.encampment)) {
-        const levies = myRealmLeviesStored.get(levy.encampment)!;
-        levies.push({
+      if (ourSectorLeviesStored.has(levy.encampment)) {
+        const levies = ourSectorLeviesStored.get(levy.encampment)!;
+        levies.set(levy.levy_id, {
           levyAffiliation: {
             rm_id: levy_affiliation.rm_id,
             realm_id: levy_affiliation.realm_id,
           },
           levy,
         });
-        myRealmLeviesStored.set(levy.encampment, levies);
+        ourSectorLeviesStored.set(levy.encampment, levies);
       } else {
-        myRealmLeviesStored.set(levy.encampment, [
-          {
-            levyAffiliation: levy_affiliation,
-            levy,
-          },
-        ]);
+        ourSectorLeviesStored.set(
+          levy.encampment,
+          new Map<number, LeviesStoredType>([
+            [levy.levy_id, { levy, levyAffiliation: levy_affiliation }],
+          ]),
+        );
       }
     });
   });
 }
+
+export const storeLevyActions = (actions: LevyActionResponseType[]) => {
+  actions.forEach((action) => {
+    ourRealmLevyActionsStored.set(action.levy_action_id, action);
+  });
+};
 
 export function getMapInteractionMode() {
   return mapInteractionMode;
@@ -129,11 +159,3 @@ export function getMapInteractionMode() {
 export function setMapInteractionMode(mode: GameModeType) {
   mapInteractionMode = mode;
 }
-
-export const getExactWorldTime = async () => {
-  const ws = getWebsocketClient();
-  const res = await ws.sendRequest({ title: "worldTime" });
-  // Base64 디코딩
-  const decodedDate = atob(res.body);
-  return new Date(decodedDate);
-};

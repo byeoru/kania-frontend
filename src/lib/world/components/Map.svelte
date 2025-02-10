@@ -8,9 +8,11 @@
   } from "../eventHandler";
   import { mapInteraction } from "../mapInteraction";
   import Loading from "../../Loading.svelte";
-  import { realmApi } from "../api/realm";
-  import { Application } from "pixi.js";
-  import type { CurrentCellInfoType } from "../../../dataTypes/aboutUiType";
+  import { Application, Graphics } from "pixi.js";
+  import type {
+    ActionType,
+    CurrentCellInfoType,
+  } from "../../../dataTypes/aboutUiType";
   import { HttpStatusCode } from "axios";
   import {
     addMyRealmId,
@@ -18,32 +20,35 @@
     getMyRealmIdCount,
     initStandardRealTime,
     initStandardWorldTime,
-    myRealmLeviesStored,
+    initWebSocketClient,
+    ourRealmLevyActionsStored,
     realmInfoMapStored,
     sectorRealmMapStored,
     setMapInteractionMode,
+    setMyRmId,
     storeCellLevies,
+    storeLevyActions,
   } from "../../shared.svelte";
-  import { select, xml, type BaseType, type Selection } from "d3";
+  import { select, xml } from "d3";
   import { realmMemberApi } from "../api/realm_member";
-  import type { MyRealmType } from "../../../model/realm";
 
   let {
     mapContainer,
     mapNode = $bindable(),
+    layerNode = $bindable(),
     mapGroup = $bindable(),
     currentCellInfo = $bindable(),
     updateCellInfoFn,
   }: {
     mapContainer: HTMLDivElement | undefined;
     mapNode: SVGSVGElement | undefined;
+    layerNode: SVGSVGElement | undefined;
     mapGroup: HTMLDivElement | undefined;
     currentCellInfo: CurrentCellInfoType | undefined;
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
   } = $props();
 
   let mapLayerCanvas = $state<HTMLCanvasElement>();
-  let mapLayerSVG = $state<SVGSVGElement>();
 
   // map(svg) 조정, handler setting
   $effect(() => {
@@ -77,10 +82,10 @@
 
   // map layer(svg, canvas) init
   $effect(() => {
-    if (!mapContainer || !mapLayerCanvas || !mapLayerSVG) {
+    if (!mapContainer || !mapLayerCanvas || !layerNode) {
       return;
     }
-    mapLayerInit(mapLayerCanvas, mapLayerSVG);
+    mapLayerInit(mapLayerCanvas, layerNode);
   });
 
   // map interaction mode(game mode) controll
@@ -165,7 +170,7 @@
           alert("올바르지 않은 svg입니다.");
           return 0;
         }
-        const { standard_times, my_realm, the_others_realms } = res.data;
+        const { standard_times, rm_id, my_realm, the_others_realms } = res.data;
 
         // 기준 시간 저장
         initStandardWorldTime(standard_times.standard_world_time);
@@ -189,10 +194,13 @@
           }
 
           // draw the others realms
-          worldMetadata.fillRealm(values, `0x${realm.color}`);
+          worldMetadata.realmGraphicsMap.set(realm.id, new Graphics());
+          worldMetadata.realmCells.set(realm.id, new Set(values));
+
+          worldMetadata.fillRealm(realm.id, values, `0x${realm.color}`);
           worldMetadata.drawCapitals(realm.capitals, realm.id, capitalGroup);
         });
-
+        setMyRmId(rm_id);
         if (!my_realm) {
           setMapInteractionMode("CELL_SELECTION");
         } else {
@@ -222,30 +230,53 @@
             sectorRealmMapStored.set(sector, myRealmId);
           }
           // draw my realm
-          worldMetadata.fillRealm(mySectorNumbers, `0x${myColor}`);
+          worldMetadata.realmGraphicsMap.set(myRealmId, new Graphics());
+          worldMetadata.realmCells.set(myRealmId, new Set(mySectorNumbers));
+          worldMetadata.fillRealm(myRealmId, mySectorNumbers, `0x${myColor}`);
           worldMetadata.drawCapitals(myCapitals, myRealmId, capitalGroup);
         }
     }
     return getMyRealmIdCount();
   }
 
-  function drawLevies(
-    unitFlagsGroup: Selection<BaseType, unknown, null, undefined>,
-  ) {
-    const cellNumbers = myRealmLeviesStored.keys();
-    for (const cellNumber of cellNumbers) {
-      worldMetadata.drawDefenseUnitFlag(cellNumber, unitFlagsGroup);
-    }
-  }
+  const drawActions = () => {
+    const actions = ourRealmLevyActionsStored.values();
+    actions.forEach((action) => {
+      const type = action.action_type as ActionType;
+      worldMetadata.drawActionRoad(
+        action.levy_action_id,
+        type,
+        action.origin_sector,
+        action.target_sector,
+      );
+      switch (type) {
+        case "Attack":
+          worldMetadata.drawAttackLogo(
+            action.target_sector,
+            action.levy_action_id,
+          );
+          break;
+        case "Move":
+          break;
+        case "Return":
+          worldMetadata.drawReturnLogo(
+            action.origin_sector,
+            action.levy_action_id,
+          );
+          break;
+      }
+    });
+  };
 
   async function callApiForDrawLevies(svgLayer: SVGSVGElement) {
     const res = await realmMemberApi.getOurRealmLevies();
     switch (res.status) {
       case HttpStatusCode.Ok:
-        const unitFlagsGroup = select(svgLayer).select("#unit_flags");
-        const { realm_levies } = res.data;
+        const { realm_levies, levy_actions } = res.data;
         storeCellLevies(realm_levies);
-        drawLevies(unitFlagsGroup);
+        storeLevyActions(levy_actions);
+        drawActions();
+
         break;
       case HttpStatusCode.NotFound:
         alert("소속된 국가가 존재하지 않습니다.");
@@ -261,27 +292,42 @@
     // layer svg element init
     mapLayerSVGInit(mapLayerSVG);
     // data fetch and draw(svg, canvas)
-    mapLayerDataInit(mapLayerSVG);
+    await mapLayerDataInit(mapLayerSVG);
+    // ws 연결
+    initWebSocketClient("ws://localhost:8081");
   }
 
   function mapLayerSVGInit(mapLayerSVG: SVGSVGElement) {
-    // layersvg에 capital group 추가
-    select(mapLayerSVG).append("g").attr("id", "capitals");
-    // layersvg에 unit flag group 추가
-    select(mapLayerSVG).append("g").attr("id", "unit_flags");
-    // layersvg에 unit advance road group 추가
-    select(mapLayerSVG).append("g").attr("id", "unit_advance_roads");
+    /**
+     * svg 요소 렌더링 순서 중요. 변경하지 말것
+     */
     // layersvg에 defs 추가
     select(mapLayerSVG).append("defs");
-    // map defs에 unit flag group defs 추가
-    const unitFlagsGroup = select(mapLayerSVG)
+    // layersvg에 unit advance road group 추가
+    select(mapLayerSVG)
+      .append("g")
+      .attr("id", "unit_action_roads")
+      .attr("stroke-dasharray", "3, 6")
+      .attr("stroke-width", "3")
+      .attr("stroke-linecap", "round"); // 끝을 둥글게
+    // layersvg에 capital group 추가
+    select(mapLayerSVG).append("g").attr("id", "capitals");
+    // layersvg에 action logo group 추가
+    select(mapLayerSVG).append("g").attr("id", "action_logos");
+
+    // map defs에 levy action logo group defs 추가
+    const actionLogoGroup = select(mapLayerSVG)
       .select("defs")
       .append("g")
-      .attr("id", "unit_flags_defs");
+      .attr("id", "action_logo_defs");
 
-    xml("/assets/img/defense_ribbon_h.svg").then((data) => {
+    xml("/assets/img/attack_logo.svg").then((data) => {
       const importedSVG = data.documentElement;
-      unitFlagsGroup.node()?.append(importedSVG);
+      actionLogoGroup.node()?.append(importedSVG);
+    });
+    xml("/assets/img/return_logo.svg").then((data) => {
+      const importedSVG = data.documentElement;
+      actionLogoGroup.node()?.append(importedSVG);
     });
   }
 
@@ -305,7 +351,7 @@
       onClick(
         event,
         mapNode,
-        mapLayerSVG,
+        layerNode,
         updateCellInfoFn,
         currentCellInfo,
         getMapInteractionMode(),
@@ -323,7 +369,7 @@
   >
     <svg
       id="map-layer-svg"
-      bind:this={mapLayerSVG}
+      bind:this={layerNode}
       width={worldMetadata.mapWidth}
       height={worldMetadata.mapHeight}
       version="1.1"

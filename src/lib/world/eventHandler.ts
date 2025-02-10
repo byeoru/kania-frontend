@@ -40,9 +40,6 @@ export function onWheel(
 
   const mapRect = mapGroup.getBoundingClientRect();
 
-  // scale에 따라 transform-origin을 설정
-  mapGroup.style.transformOrigin = `0px 0px`;
-
   // 기존 좌표에 대한 스케일 적용
   const prevScale = mapInteraction.scale;
   mapInteraction.scale += event.deltaY * -0.01;
@@ -81,6 +78,9 @@ export function onWheel(
     mapInteraction.translateY += elementDeltaMaxY;
   }
 
+  // scale에 따라 transform-origin을 설정
+  mapGroup.style.transformOrigin = `0px 0px`;
+
   // 트랜스폼 업데이트
   mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
 }
@@ -105,12 +105,16 @@ export async function onClick(
       clickCellSection(event, map, svgLayer, latestCellInfo, updateCellInfoFn);
       break;
     case "ATTACK":
-      clickAttack(event, map);
+      clickAttack(event, map, svgLayer);
       break;
   }
 }
 
-function clickAttack(event: MouseEvent, map: SVGSVGElement) {
+function clickAttack(
+  event: MouseEvent,
+  map: SVGSVGElement,
+  svgLayer: SVGSVGElement,
+) {
   const { x, y } = getLocalSvgCoordinates(event, map);
   const targetSector = worldMetadata.findCell(x, y); // pack cell id
 
@@ -141,6 +145,7 @@ function clickAttack(event: MouseEvent, map: SVGSVGElement) {
         originSector: attackLevyInfoStored.encampment,
         targetSector: targetSector,
       },
+      svgLayer,
     });
   }
 }
@@ -254,9 +259,9 @@ async function clickNormal(
     worldMetadata.removeSelectedSectors();
     if (!sectorRealmMapStored.has(i)) {
       worldMetadata.fillSelectedSectors(
-        worldMetadata.provinceCells[provinceId],
+        worldMetadata.provinceCells.get(provinceId)!,
         "0xC8B4A0",
-        "0x8C8C8C",
+        "0x91835f",
       );
       worldMetadata.fillOneCell(i, "0x993800");
     }
@@ -266,12 +271,11 @@ async function clickNormal(
     if (!sectorRealmMapStored.has(i)) {
       worldMetadata.fillOneCell(i, "0x993800");
       // 이전 클릭이 주인있는 영토인경우 fill province
-      worldMetadata.tempProvinceFillGraphics;
       if (sectorRealmMapStored.has(latestCellInfo.i)) {
         worldMetadata.fillSelectedSectors(
-          worldMetadata.provinceCells[provinceId],
+          worldMetadata.provinceCells.get(provinceId)!,
           "0xC8B4A0",
-          "0x8C8C8C",
+          "0x91835f",
         );
       }
     } else {

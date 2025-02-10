@@ -15,6 +15,7 @@
   import { select } from "d3";
   import type { CurrentCellInfoType } from "../../../../dataTypes/aboutUiType";
   import FooterBtn from "./FooterBtn.svelte";
+  import { Graphics } from "pixi.js";
 
   let {
     currentCellInfo,
@@ -55,7 +56,6 @@
 
     switch (res.status) {
       case HttpStatusCode.Ok:
-        worldMetadata.fillRealm([i], `0x${hexColor}`);
         const capitalGroup = select(svgLayer!).select("#capitals");
         if (!capitalGroup) {
           alert("올바르지 않은 svg입니다.");
@@ -75,6 +75,11 @@
             tax_collection_at,
           },
         } = res.data;
+        // draw
+        worldMetadata.realmGraphicsMap.set(id, new Graphics());
+        worldMetadata.realmCells.set(id, new Set([i]));
+        worldMetadata.fillRealm(id, [i], `0x${hexColor}`);
+        // save info
         sectorRealmMapStored.set(i, id);
         myRealmPopulationStored.set(i, currentCellInfo.population);
         realmInfoMapStored.set(id, {

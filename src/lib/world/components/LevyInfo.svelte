@@ -29,26 +29,33 @@
 <div class="levy_container">
   <div class="levy">
     <div class="unit_name_container">
-      <span class="unit_status_icon"></span>
+      <span
+        class="unit_status_icon"
+        style:--bg-1={levy.stationed
+          ? "url('/assets/img/defense_ribbon_h.png')"
+          : "url('/assets/img/melee_ribbon_h.png')"}
+      ></span>
       <span class="unit_name">{levy.name}</span>
     </div>
     <div class="unit_info">
-      <section>
-        <span class="unit_type">검병</span>
-        <span class="count">{levy.swordmen}</span>
-      </section>
-      <section>
-        <span class="unit_type">궁병</span>
-        <span class="count">{levy.archers}</span>
-      </section>
-      <section>
-        <span class="unit_type">방패병</span>
-        <span class="count">{levy.shield_bearers}</span>
-      </section>
-      <section>
-        <span class="unit_type">창기병</span>
-        <span class="count">{levy.lancers}</span>
-      </section>
+      {#if levy.stationed}
+        <section>
+          <span class="unit_type">검병</span>
+          <span class="count">{levy.swordmen}</span>
+        </section>
+        <section>
+          <span class="unit_type">궁병</span>
+          <span class="count">{levy.archers}</span>
+        </section>
+        <section>
+          <span class="unit_type">방패병</span>
+          <span class="count">{levy.shield_bearers}</span>
+        </section>
+        <section>
+          <span class="unit_type">창기병</span>
+          <span class="count">{levy.lancers}</span>
+        </section>
+      {/if}
       <section>
         <span class="unit_type">보급병</span>
         <span class="count">{levy.supply_troop}</span>
@@ -109,7 +116,7 @@
   .unit_status_icon {
     height: 100%;
     aspect-ratio: 1;
-    background-image: url("/assets/img/defense_ribbon_h.png");
+    background-image: var(--bg-1);
     background-size: 100% auto;
     background-repeat: no-repeat;
     background-position: center;

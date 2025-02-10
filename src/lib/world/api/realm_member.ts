@@ -1,7 +1,7 @@
 import baseAxios from "../../../apiConfig";
 import type {
   GetMeAndOthersReamsResponseType,
-  GetOurRealmLeviesResponseType,
+  GetOurRealmLeviesWithActionsResponseType,
 } from "../../../model/realm_member";
 
 export const realmMemberApi = {
@@ -14,7 +14,7 @@ export const realmMemberApi = {
     );
   },
   async getOurRealmLevies() {
-    return await baseAxios.get<GetOurRealmLeviesResponseType>(
+    return await baseAxios.get<GetOurRealmLeviesWithActionsResponseType>(
       "/realm_members/levies",
       {
         withCredentials: true,

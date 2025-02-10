@@ -1,15 +1,14 @@
 import {
+  easeLinear,
   json,
   quadtree,
+  select,
   type BaseType,
   type Selection,
-  color,
-  select,
 } from "d3";
 import type {
   FeatureClass,
   PackCellsType,
-  ProvinceClass,
 } from "../../dataTypes/packCellsType";
 import type { GridCellsType } from "../../dataTypes/gridCellsType";
 import {
@@ -19,20 +18,36 @@ import {
   type ContainerChild,
   type PointData,
 } from "pixi.js";
-import { isMyRealmId, sectorRealmMapStored } from "../shared.svelte";
+import {
+  isMyRealmId,
+  isMySector,
+  ourRealmLevyActionsStored,
+  ourSectorLeviesStored,
+  realmInfoMapStored,
+  sectorRealmMapStored,
+  storeCellLevies,
+} from "../shared.svelte";
+import { type SectorIdType } from "../../model/realm";
+import type { UpdateSectorBodyType } from "../../model/ws";
+import { levyApi } from "./api/levy";
+import { HttpStatusCode } from "axios";
+import type { LevyActionResponseType } from "../../model/levy_action";
+import type { ActionType, LeviesStoredType } from "../../dataTypes/aboutUiType";
+import { actionRoadColor } from "../../constant";
 
 export const worldMetadata = {
   pack: {} as PackCellsType | null,
   grid: {} as GridCellsType | null,
   mapWidth: 7680,
   mapHeight: 4320,
-  provinceCells: {} as { [key: number]: Array<number> },
+  provinceCells: new Map<number, number[]>(),
+  realmCells: new Map<number, Set<number>>(),
   mapLayerStage: null as Container<ContainerChild> | null,
   // PixiJS Graphics 객체 생성
   cellGraphics: new Graphics(), // 셀 경계선용 그래픽 객체
   tempProvinceFillGraphics: new Graphics(), // 선택한 주 색칠용 그래픽 객체
   tempSectorFillGraphics: new Graphics(), // 선택한 셀 색칠용 그래픽 객체
-  realmGraphics: new Graphics(), // 영토 색칠용 그래픽 객체
+  realmGraphicsMap: new Map<SectorIdType, Graphics>(), // 영토 색칠용 그래픽 객체 Map
 
   async loadMetadata() {
     this.pack = (await json("assets/data/pack.json")) ?? null;
@@ -75,20 +90,91 @@ export const worldMetadata = {
     return { x: xCenter, y: yCenter };
   },
 
-  drawDefenseUnitFlag(
-    cellId: number,
-    // levyId: number,
-    parent: Selection<BaseType, unknown, null, undefined>,
+  drawActionRoad(
+    actionId: number,
+    actionType: ActionType,
+    originSector: number,
+    targetSector: number,
   ) {
-    const points = getPackPolygon(cellId);
-    const point = this.findCellCenter(points);
-    parent
+    const layerSvg = select("#map-layer-svg");
+    const roadParentSvg = layerSvg.select("#unit_action_roads");
+    const originSectorCenter = worldMetadata.findCellCenter(
+      getPackPolygon(originSector),
+    );
+    const targetSectorCenter = worldMetadata.findCellCenter(
+      getPackPolygon(targetSector),
+    );
+    const line = roadParentSvg
+      .append("line")
+      .attr("id", `road_${actionId}`)
+      .attr("x1", originSectorCenter.x)
+      .attr("y1", originSectorCenter.y)
+      .attr("x2", targetSectorCenter.x)
+      .attr("y2", targetSectorCenter.y)
+      .attr("stroke", actionRoadColor.get(actionType)!)
+      .attr("stroke-dashoffset", "0");
+
+    const animate = () => {
+      line
+        .attr("stroke-dashoffset", "0")
+        .transition()
+        .duration(1500)
+        .ease(easeLinear)
+        .attr("stroke-dashoffset", "-9")
+        .on("end", animate);
+    };
+    animate();
+  },
+
+  drawAttackLogo(targetSector: number, levyActionId: number) {
+    const layerSvg = select("#map-layer-svg");
+    const logoParentSvg = layerSvg.select("#action_logos");
+    const sectorPoints = getPackPolygon(targetSector);
+    const point = this.findCellCenter(sectorPoints);
+    logoParentSvg
       .append("use")
-      .attr("href", `#defense`)
-      // .attr("id", `levy_${levyId}`)
-      .attr("class", "defense")
-      .attr("x", point.x)
-      .attr("y", point.y);
+      .attr("href", `#attack`)
+      .attr("id", `logo_${levyActionId}`)
+      .attr("x", point.x - 9)
+      .attr("y", point.y - 9)
+      .style("opacity", 0)
+      .transition()
+      .duration(500)
+      .style("opacity", 1);
+  },
+
+  drawReturnLogo(targetSector: number, levyActionId: number) {
+    const layerSvg = select("#map-layer-svg");
+    const logoParentSvg = layerSvg.select("#action_logos");
+    const sectorPoints = getPackPolygon(targetSector);
+    const point = this.findCellCenter(sectorPoints);
+    logoParentSvg
+      .append("use")
+      .attr("href", `#return`)
+      .attr("id", `logo_${levyActionId}`)
+      .attr("x", point.x - 9)
+      .attr("y", point.y - 9)
+      .style("opacity", 0)
+      .transition()
+      .duration(500)
+      .style("opacity", 1);
+  },
+
+  eraseActionLogoAndRoad(actionId: number) {
+    const parent = select("#map-layer-svg");
+    parent
+      .select(`#road_${actionId}`)
+      .interrupt()
+      .transition()
+      .duration(500)
+      .style("opacity", 0)
+      .remove();
+    parent
+      .select(`#logo_${actionId}`)
+      .transition()
+      .duration(500)
+      .style("opacity", 0)
+      .remove();
   },
 
   drawCapitals(
@@ -116,15 +202,15 @@ export const worldMetadata = {
     for (const key in cellIds) {
       const province = this.findProvince(cellIds[key]);
       if (!province) continue;
-      if (!this.provinceCells[province]) {
-        this.provinceCells[province] = [];
+      if (!this.provinceCells.has(province)) {
+        this.provinceCells.set(province, []);
       }
-      this.provinceCells[province].push(Number(key));
+      this.provinceCells.get(province)?.push(Number(key));
     }
   },
 
   drawProvinceCellsBorder(provinceId: number) {
-    const currentProvinceCells = this.provinceCells[provinceId];
+    const currentProvinceCells = this.provinceCells.get(provinceId)!;
     currentProvinceCells.forEach((cellId) => {
       this.drawSectorPolygon(cellId, this.cellGraphics);
     });
@@ -155,20 +241,113 @@ export const worldMetadata = {
     this.tempSectorFillGraphics.clear();
   },
 
-  fillRealm(cellIds: number[], color: string) {
-    const blurFilter = new BlurFilter();
-    // blurFilter.strength = 3; // 블러 강도를 설정 (0은 블러 없음, 값이 클수록 강한 블러)
-    // this.realmGraphics.filters = [blurFilter]; // 그래픽에 필터를 적용
-    cellIds.forEach((cellId) => {
-      this.drawSectorPolygon(cellId, this.realmGraphics);
-    });
-    this.realmGraphics.closePath();
-    this.realmGraphics.fill({ color });
-    this.mapLayerStage!.addChild(this.realmGraphics);
+  fillRealm(realmId: number, cellIds: number[], color: string) {
+    if (!this.realmGraphicsMap.has(realmId)) {
+      return;
+    }
+
+    const graphics = this.realmGraphicsMap.get(realmId)!;
+    const lineMap = new Map<string, PointData>();
+
+    for (const cell of cellIds) {
+      const onborder = this.pack!.cells.cells.c[cell].some(
+        (n) => sectorRealmMapStored.get(n) !== realmId,
+      );
+      if (onborder) {
+        const vertices = this.pack!.cells.cells.v[cell].filter((v) =>
+          this.pack!.cells.vertices.c[v].some(
+            (i) => sectorRealmMapStored.get(i) !== realmId,
+          ),
+        );
+
+        const loopCount = vertices.length <= 2 ? 1 : vertices.length;
+        const firstVertex = this.pack!.cells.cells.v[cell][0];
+        const lastVertex =
+          this.pack!.cells.cells.v[cell][
+            this.pack!.cells.cells.v[cell].length - 1
+          ];
+        if (
+          loopCount === 1 &&
+          vertices[0] === firstVertex &&
+          vertices[vertices.length - 1] === lastVertex
+        ) {
+          const f = vertices.length - 1;
+          const b = f - 1;
+          const valid = this.pack!.cells.vertices.c[vertices[f]].find((c1) => {
+            return this.pack!.cells.vertices.c[vertices[b]].find(
+              (c2) => c1 === c2 && sectorRealmMapStored.get(c1) !== realmId,
+            );
+          });
+          if (valid) {
+            const startPoint = this.pack!.cells.vertices.p[vertices[f]];
+            const endPoint = this.pack!.cells.vertices.p[vertices[b]];
+
+            lineMap.set(`${startPoint[0]} ${startPoint[1]}`, {
+              x: endPoint[0],
+              y: endPoint[1],
+            });
+          }
+        } else {
+          for (let i = 0; i < loopCount; i++) {
+            const f = i % vertices.length;
+            const b = (i + 1) % vertices.length;
+
+            const valid = this.pack!.cells.vertices.c[vertices[f]].find(
+              (c1) => {
+                return this.pack!.cells.vertices.c[vertices[b]].find(
+                  (c2) => c1 === c2 && sectorRealmMapStored.get(c1) !== realmId,
+                );
+              },
+            );
+            if (valid) {
+              const startPoint = this.pack!.cells.vertices.p[vertices[f]];
+              const endPoint = this.pack!.cells.vertices.p[vertices[b]];
+
+              lineMap.set(`${startPoint[0]} ${startPoint[1]}`, {
+                x: endPoint[0],
+                y: endPoint[1],
+              });
+            }
+          }
+        }
+      }
+    }
+
+    let keys = lineMap.keys().toArray();
+    let vKey = keys[0];
+    let initKey = vKey;
+    const splitedInitKey = initKey.split(" ");
+    graphics.moveTo(Number(splitedInitKey[0]), Number(splitedInitKey[1]));
+
+    while (true) {
+      const value = lineMap.get(vKey)!;
+      graphics.lineTo(value.x, value.y);
+      lineMap.delete(vKey);
+      const nextKey = `${value.x} ${value.y}`;
+      if (nextKey === initKey) {
+        if (lineMap.size <= 0) {
+          break;
+        }
+        keys = lineMap.keys().toArray();
+        vKey = keys[0];
+        initKey = vKey;
+        const newSplitedInitKey = initKey.split(" ");
+        graphics.moveTo(
+          Number(newSplitedInitKey[0]),
+          Number(newSplitedInitKey[1]),
+        );
+      } else {
+        vKey = nextKey;
+      }
+    }
+
+    graphics.stroke({ color, width: 4, alignment: 1, cap: "round" });
+    graphics.fill({ color, alpha: 0.1 });
+    this.mapLayerStage!.addChild(graphics);
   },
 
-  removeRealm() {
-    this.realmGraphics.clear();
+  removeRealm(realmId: number) {
+    this.realmGraphicsMap.get(realmId)?.clear();
   },
 
   // 주변 육지 색칠하기
@@ -215,212 +394,92 @@ export const worldMetadata = {
     graphic.poly(pointDatas, true);
   },
 
-  drawProvinceBorder() {
-    const { cells, vertices, features } = this.pack!.cells;
-    const provinces = this.pack!.cells.provinces;
-    const n = cells.i.length;
+  updateSectorOwner(body: UpdateSectorBodyType) {
+    const sector = body.sector;
+    const oldOwner = realmInfoMapStored.get(body.old_realm_id);
+    const newOwnerColor = realmInfoMapStored.get(body.new_realm_id)!;
+    // 소유권 이전
+    sectorRealmMapStored.set(sector, body.new_realm_id);
+    const realmCells = this.realmCells.get(body.new_realm_id)!;
+    realmCells.add(sector);
+    // fill new owner
+    this.removeRealm(body.new_realm_id);
+    this.fillRealm(
+      body.new_realm_id,
+      realmCells.keys().toArray(),
+      newOwnerColor!.color,
+    );
 
-    const used = new Uint8Array(cells.i.length);
-    const vArray = new Array(provinces.length); // store vertices array
-    const body = new Array(provinces.length).fill(""); // path around each state
-    const gap = new Array(provinces.length).fill(""); // path along water for each state to fill the gaps
-    const halo = new Array(provinces.length).fill(""); // path around states, but not lakes
-
-    const getStringPoint = (v: [number, string]) => vertices.p[v[0]].join(",");
-
-    const getShoreline = function (lake: FeatureClass) {
-      const uniqueCells = new Set<number>();
-      if (!lake.vertices) lake.vertices = [];
-      lake.vertices.forEach((v) =>
-        vertices.c[v].forEach((c) => cells.h[c] >= 20 && uniqueCells.add(c)),
+    // 토착세력이 아닐 경우
+    if (oldOwner) {
+      const oldOwnerColor = oldOwner.color;
+      this.realmCells.get(body.old_realm_id)?.delete(sector);
+      // redraw old owner
+      this.removeRealm(body.old_realm_id);
+      this.fillRealm(
+        body.old_realm_id,
+        [...this.realmCells.get(body.old_realm_id)!],
+        oldOwnerColor,
       );
-      lake.shoreline = [...uniqueCells];
+    }
+  },
+  async updateLevyEncampment(action: LevyActionResponseType) {
+    const originLevies = ourSectorLeviesStored.get(action.origin_sector)!;
+    originLevies.delete(action.levy_id);
+
+    ourSectorLeviesStored.delete(action.origin_sector);
+    ourSectorLeviesStored.set(action.origin_sector, originLevies);
+
+    const res = await levyApi.findLevy(action.levy_id);
+    switch (res.status) {
+      case HttpStatusCode.Ok:
+        storeCellLevies([res.data.realm_levy]);
+        break;
+      default:
+        alert(res.data.api_response.description);
+        break;
+    }
+    ourRealmLevyActionsStored.delete(action.levy_action_id);
+  },
+  async updateReturnedLevyEncampment(action: LevyActionResponseType) {
+    const encampmentLevies = ourSectorLeviesStored.get(action.target_sector)!;
+    encampmentLevies.delete(action.levy_id);
+
+    ourSectorLeviesStored.delete(action.target_sector);
+    ourSectorLeviesStored.set(action.target_sector, encampmentLevies);
+
+    const res = await levyApi.findLevy(action.levy_id);
+    switch (res.status) {
+      case HttpStatusCode.Ok:
+        storeCellLevies([res.data.realm_levy]);
+        break;
+      default:
+        alert(res.data.api_response.description);
+        break;
+    }
+    ourRealmLevyActionsStored.delete(action.levy_action_id);
+  },
+  updateAnnihilatedLevy(action: LevyActionResponseType) {
+    const sectorLevies = ourSectorLeviesStored.get(action.origin_sector)!;
+    const prevLevy = sectorLevies.get(action.levy_id)!;
+    const annihilatedLevy: LeviesStoredType = {
+      levyAffiliation: prevLevy.levyAffiliation,
+      levy: {
+        levy_id: prevLevy.levy.levy_id,
+        name: prevLevy.levy.name,
+        encampment: prevLevy.levy.encampment,
+        swordmen: 0,
+        shield_bearers: 0,
+        archers: 0,
+        lancers: 0,
+        supply_troop: prevLevy.levy.supply_troop,
+        movement_speed: 0,
+        stationed: true,
+      },
     };
-
-    // define inner-province lakes to omit on border render
-    const innerLakes = features.map((feature) => {
-      const featureClass = feature as FeatureClass;
-      if (featureClass.type !== "lake") return false;
-      if (!featureClass.shoreline) getShoreline(featureClass);
-
-      const provinces = featureClass.shoreline?.map((i) => cells.province[i]);
-      return new Set(provinces).size > 1 ? false : true;
-    });
-
-    for (const i of Object.values(cells.i)) {
-      if (used[i]) continue;
-      const province = cells.province[i];
-
-      // 주변 cell들의 state를 확인하여 현재 cell이 경계에 위치하는지 확인
-      const onborder = cells.c[i].some((n) => cells.province[n] !== province);
-      // 최외곽(경계)이 아니라면 pass
-      if (!onborder) continue;
-
-      // 최외각(경계) cell의 이웃 cell중 현재 state가 아닌(내 땅이 아닌) cell을 찾는다.
-      const borderWith = cells.c[i]
-        .map((c) => cells.province[c])
-        .find((n) => n !== province);
-
-      // 최외각(경계) cell의 꼭짓점들중 꼭짓점과 인접한 cell의 state가 아까 찾은 다른 state(borderWith)인 것을 찾는다.
-      const vertex = cells.v[i].find((v) =>
-        vertices.c[v].some((i) => cells.province[i] === borderWith),
-      );
-
-      // 찾은 꼭짓점을 현재 state에 연결한다.
-      const chain = connectVertices(vertex!, province);
-
-      // noInnerLakes === filter 된 chain
-      const noInnerLakes = chain.filter((v) => v[1] !== "innerLake");
-
-      if (noInnerLakes.length < 3) continue;
-
-      // // get path around the province
-      if (!vArray[province]) vArray[province] = [];
-      // 꼭짓점들의 좌표 값을 가져온다.
-      const points = noInnerLakes.map((v) => vertices.p[v[0]]);
-      // 현재 state의 꼭짓점 좌표값들을 저장한다.
-      vArray[province].push(points);
-      // path form 형식으로 가공한다. ('M': move, 'L': Line)
-      body[province] += "M" + points.join("L");
-      // connect path for halo
-      let discontinued = true;
-      halo[province] += noInnerLakes
-        .map((v) => {
-          if (v[1] === "border") {
-            discontinued = true;
-            return "";
-          }
-
-          const operation = discontinued ? "M" : "L";
-          discontinued = false;
-          return `${operation}${getStringPoint(v)}`;
-        })
-        .join("");
-
-      // connect gaps between province and water into a single path
-      discontinued = true;
-      gap[province] += chain
-        .map((v) => {
-          if (v[1] === "land") {
-            discontinued = true;
-            return "";
-          }
-
-          const operation = discontinued ? "M" : "L";
-          discontinued = false;
-          return `${operation}${getStringPoint(v)}`;
-        })
-        .join("");
-    }
-
-    // find province visual center
-    // vArray.forEach((ar, i) => {
-    //   const sorted = ar.sort((a, b) => b.length - a.length); // sort by points number
-    //   states[i].pole = polylabel(sorted, 1.0); // pole of inaccessibility
-    // });
-
-    const bodyData = body
-      .map((p, s) => [
-        p.length > 10 ? p : null,
-        s,
-        (provinces[s] as ProvinceClass).color,
-      ])
-      .filter((d) => d[0]);
-    const gapData = gap
-      .map((p, s) => [
-        p.length > 10 ? p : null,
-        s,
-        (provinces[s] as ProvinceClass).color,
-      ])
-      .filter((d) => d[0]);
-
-    const bodyString = bodyData
-      .map(
-        (d) =>
-          `<path id="province${d[1]}" d="${d[0]}" fill="${d[2]}" stroke="none"/>`,
-      )
-      .join("");
-    const gapString = gapData
-      .map(
-        (d) =>
-          `<path id="province-gap${d[1]}" d="${d[0]}" fill="none" stroke="${d[2]}"/>`,
-      )
-      .join("");
-    select("#provincesBody").html(bodyString + gapString);
-
-    const haloData = halo
-      .map((p, s) => [
-        p.length > 10 ? p : null,
-        s,
-        (provinces[s] as ProvinceClass).color,
-      ])
-      .filter((d) => d[0]);
-
-    const haloString = haloData
-      .map((d) => {
-        const stroke = color(d[2]) ? color(d[2])!.darker().hex() : "#666666";
-        return `<path id="province-border${d[1]}" d="${d[0]}" clip-path="url(#province-clip${d[1]})" stroke="${stroke}"/>`;
-      })
-      .join("");
-    select("#provincesHalo").html(haloString);
-
-    const clipString = bodyData
-      .map(
-        (d) =>
-          `<clipPath id="province-clip${d[1]}"><use href="#province${d[1]}"/></clipPath>`,
-      )
-      .join("");
-    select("#provincePaths").html(clipString);
-
-    function connectVertices(
-      start: number,
-      province: number,
-    ): [number, string][] {
-      const chain: [number, string][] = []; // vertices chain to form a path
-      const getType = (c: number[]) => {
-        const borderCell = c.find((i: number) => cells.b[i]);
-        if (borderCell) return "border";
-
-        const waterCell = c.find((i: number) => cells.h[i] < 20);
-        if (!waterCell) return "land";
-        if (innerLakes[cells.f[waterCell]]) return "innerLake";
-        return (features[cells.f[waterCell]] as FeatureClass).type;
-      };
-
-      for (
-        let i = 0, current = start;
-        i === 0 || (current !== start && i < 20000);
-        i++
-      ) {
-        const prev = chain.length ? chain[chain.length - 1][0] : -1; // previous vertex in chain
-
-        const c = vertices.c[current]; // cells adjacent to vertex
-        chain.push([current, getType(c)]); // add current vertex to sequence
-
-        c.filter((c) => cells.province[c] === province).forEach(
-          (c) => (used[c] = 1),
-        );
-        const c0 = c[0] >= n || cells.province[c[0]] !== province;
-        const c1 = c[1] >= n || cells.province[c[1]] !== province;
-        const c2 = c[2] >= n || cells.province[c[2]] !== province;
-
-        const v = vertices.v[current]; // neighboring vertices
-
-        if (v[0] !== prev && c0 !== c1) current = v[0];
-        else if (v[1] !== prev && c1 !== c2) current = v[1];
-        else if (v[2] !== prev && c0 !== c2) current = v[2];
-
-        if (current === prev) {
-          console.error("Next vertex is not found");
-          break;
-        }
-      }
-
-      if (chain.length) chain.push(chain[0]);
-      return chain;
-    }
-
-    // invokeActiveZooming();
+    sectorLevies.set(action.levy_id, annihilatedLevy);
+    ourSectorLeviesStored.delete(action.origin_sector);
+    ourSectorLeviesStored.set(action.origin_sector, sectorLevies);
   },
 };
 

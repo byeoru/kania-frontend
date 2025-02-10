@@ -8,10 +8,10 @@
           style="fill:none;shape-rendering:geometricprecision;stroke-linejoin:round;fill:none;"
           ><g
             id="provinceBorders"
-            opacity="0.8"
+            opacity="0.5"
             stroke="#56566d"
             stroke-width="0.7"
-            stroke-dasharray="1"
+            stroke-dasharray="5"
             stroke-linecap="butt"
             style="fill:none;shape-rendering:geometricprecision;stroke-linejoin:round;fill:none;"
             ><path

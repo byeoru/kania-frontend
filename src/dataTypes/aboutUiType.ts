@@ -18,6 +18,8 @@ export type GameModeType = "NORMAL" | "CELL_SELECTION" | "ATTACK" | "MOVE";
 
 export type CellNumberType = number;
 
+export type ActionType = "Attack" | "Move" | "Return";
+
 export interface AttackLevyInfoType extends LevyAffiliationType {
   levyId: number;
   encampment: number;

@@ -8,15 +8,11 @@
   } from "../../../shared.svelte";
   import { HttpStatusCode } from "axios";
   import { levyApi } from "../../api/levy";
-  import { select } from "d3";
-  import { worldMetadata } from "../../worldMetadata";
 
   let {
-    mapNode,
     currentCellInfo,
     updateCellInfoFn,
   }: {
-    mapNode: SVGSVGElement;
     currentCellInfo: CurrentCellInfoType;
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
   } = $props();
@@ -60,18 +56,12 @@
         // store에 levy 정보를 추가
         storeCellLevies([
           {
-            levy_affiliation: res.data.Levy_affiliation,
+            levy_affiliation: res.data.levy_affiliation,
             levies: [res.data.levy],
           },
         ]);
         // 변경된 인구 수 업데이트
         myRealmPopulationStored.set(currentCellInfo.i, res.data.population);
-        // map에 defense flag 표시
-        const unitFlagsGroup = select(mapNode!).select("#unit_flags");
-        worldMetadata.drawDefenseUnitFlag(
-          res.data.levy.encampment,
-          unitFlagsGroup,
-        );
 
         updateCellInfoFn({
           ...currentCellInfo,

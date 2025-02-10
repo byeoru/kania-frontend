@@ -1,4 +1,7 @@
-import type { LevyAffiliationType } from "./realm_member";
+import type {
+  LevyAffiliationType,
+  RealmLeviesResponseType,
+} from "./realm_member";
 import type { ApiResponseType } from "./response";
 
 export type LevyRequestType = {
@@ -28,5 +31,12 @@ export interface LevyResponseType extends ApiResponseType {
   levy: LevyType;
   state_coffers: number;
   population: number;
-  Levy_affiliation: LevyAffiliationType;
+  levy_affiliation: LevyAffiliationType;
+}
+export interface FindLevyResponseType extends ApiResponseType {
+  realm_levy: RealmLeviesResponseType;
+}
+
+export interface FindSectorLeviesResponseType extends ApiResponseType {
+  realm_levies: RealmLeviesResponseType[];
 }

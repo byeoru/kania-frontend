@@ -24,13 +24,14 @@
   } from "../lib/world/eventHandler.ts";
 
   let mapContainer = $state<HTMLDivElement>();
-  let childMap = $state<SVGSVGElement>();
+  let mapSVG = $state<SVGSVGElement>();
+  let mapLayerSVG = $state<SVGSVGElement>();
   let mapGroup = $state<HTMLDivElement>();
   let currentCellInfo = $state<CurrentCellInfoType>();
 
   $effect(() => {
     return () => {
-      getWebsocketClient().close();
+      getWebsocketClient()?.close();
     };
   });
 
@@ -56,7 +57,7 @@
 <div
   class="whole_screen"
   onmousemove={(event) => onMouseMove(event, mapContainer, mapGroup)}
-  onmouseup={() => onMouseUp(childMap)}
+  onmouseup={() => onMouseUp(mapSVG)}
   onmouseleave={onMouseLeave}
   onkeyup={onKeyUp}
 >
@@ -65,14 +66,16 @@
   <div class="map_container" bind:this={mapContainer}>
     <Map
       {mapContainer}
-      bind:mapNode={childMap}
+      bind:mapNode={mapSVG}
+      bind:layerNode={mapLayerSVG}
       bind:mapGroup
       bind:currentCellInfo
       {updateCellInfoFn}
     />
   </div>
   <RegionInfo
-    mapNode={childMap}
+    mapNode={mapSVG}
+    layerNode={mapLayerSVG}
     cellInfo={currentCellInfo}
     {updateCellInfoFn}
     worldTime={getWorldTime()}

@@ -13,17 +13,18 @@
     realmInfoMapStored,
     sectorRealmMapStored,
   } from "../../shared.svelte";
-  import { realmApi } from "../api/realm";
   import { worldMetadata } from "../worldMetadata";
   import Muster from "./modal/Muster.svelte";
 
   const {
     mapNode,
+    layerNode,
     cellInfo,
     updateCellInfoFn,
     worldTime,
   }: {
     mapNode: SVGSVGElement | undefined;
+    layerNode: SVGSVGElement | undefined;
     cellInfo: CurrentCellInfoType | undefined;
     updateCellInfoFn: (newInfo: CurrentCellInfoType) => void;
     worldTime: Date | undefined;
@@ -89,7 +90,7 @@
       return;
     }
     openModal("부대 창설", Muster, {
-      mapNode,
+      layerNode,
       currentCellInfo: cellInfo,
       updateCellInfoFn,
     });

@@ -4,10 +4,10 @@
   import FooterBtn from "./FooterBtn.svelte";
   import {
     attackLevyInfoStored,
-    getExactWorldTime,
-    myRealmLeviesStored,
+    ourSectorLeviesStored,
     setMapInteractionMode,
     showModal,
+    storeLevyActions,
   } from "../../../shared.svelte";
   import { getPackPolygon, worldMetadata } from "../../worldMetadata";
   import {
@@ -60,18 +60,37 @@
       case HttpStatusCode.Ok:
         $showModal = false;
         setMapInteractionMode("NORMAL");
-        // TODO: 공격로 지도에 추가
-        // TODO: 부대 store에서 출병한 부대 제거
-        const sectorLevies = myRealmLeviesStored
-          .get(attackActionData.originSector)
-          ?.filter((levy) => {
-            return levy.levy.levy_id !== levyId;
+
+        worldMetadata.drawActionRoad(
+          res.data.levy_action.levy_action_id,
+          "Attack",
+          attackActionData.originSector,
+          attackActionData.targetSector,
+        );
+
+        worldMetadata.drawAttackLogo(
+          attackActionData.targetSector,
+          res.data.levy_action.levy_action_id,
+        );
+
+        const sectorLevies = ourSectorLeviesStored.get(
+          attackActionData.originSector,
+        );
+        const attackerLevy = sectorLevies?.get(levyId);
+        if (sectorLevies && attackerLevy) {
+          sectorLevies?.set(levyId, {
+            levyAffiliation: attackerLevy.levyAffiliation,
+            levy: { ...attackerLevy.levy, stationed: false },
           });
-        if (!sectorLevies || sectorLevies.length === 0) {
-          myRealmLeviesStored.delete(attackActionData.originSector);
-        } else {
-          myRealmLeviesStored.set(attackActionData.originSector, sectorLevies);
+          ourSectorLeviesStored.delete(attackActionData.originSector);
+          ourSectorLeviesStored.set(
+            attackActionData.originSector,
+            sectorLevies,
+          );
         }
+
+        // action store에 추가
+        storeLevyActions([res.data.levy_action]);
         break;
       case HttpStatusCode.BadRequest:
         alert("공격이 실패했습니다.");

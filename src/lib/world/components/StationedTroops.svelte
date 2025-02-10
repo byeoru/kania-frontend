@@ -3,7 +3,7 @@
     type CurrentCellInfoType,
     type LeviesStoredType,
   } from "../../../dataTypes/aboutUiType";
-  import { myRealmLeviesStored } from "../../shared.svelte";
+  import { ourSectorLeviesStored } from "../../shared.svelte";
   import LevyInfo from "./LevyInfo.svelte";
 
   let {
@@ -16,7 +16,7 @@
 
   $effect(() => {
     if (!cellInfo) return;
-    levies = myRealmLeviesStored.get(cellInfo.i) ?? [];
+    levies = ourSectorLeviesStored.get(cellInfo.i)?.values().toArray() ?? [];
   });
 </script>
 
