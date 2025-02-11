@@ -23,6 +23,68 @@ import { indigenousUnitApi } from "./api/indigenous_unit.ts";
 import { HttpStatusCode } from "axios";
 import type { IndigenousUnitType } from "../../model/indigenous_unit.ts";
 
+// export function onWheel(
+//   event: WheelEvent,
+//   mapContainer: HTMLDivElement | undefined,
+//   mapGroup: HTMLDivElement | undefined,
+// ) {
+//   if (!mapContainer || !mapGroup) {
+//     return;
+//   }
+
+//   event.preventDefault(); // 기본 스크롤 방지
+
+//   const containerRect = mapContainer.getBoundingClientRect();
+//   const containerCenterX = containerRect.width / 2;
+//   const containerCenterY = containerRect.height / 2;
+
+//   const mapRect = mapGroup.getBoundingClientRect();
+
+//   // 기존 좌표에 대한 스케일 적용
+//   const prevScale = mapInteraction.scale;
+//   mapInteraction.scale += event.deltaY * -0.01;
+//   mapInteraction.scale = Math.min(
+//     Math.max(mapInteraction.minScale, mapInteraction.scale),
+//     mapInteraction.maxScale,
+//   ); // 스케일 제한
+
+//   // 경계 제한 계산
+//   const { elementDeltaMinX, elementDeltaMinY } =
+//     mapInteraction.getElementMinDelta(containerRect, mapRect);
+//   const { elementDeltaMaxX, elementDeltaMaxY } =
+//     mapInteraction.getElementMaxDelta(containerRect, mapRect);
+
+//   // 중심 기준 이동 계산
+//   const scaleFactor = mapInteraction.scale / prevScale;
+//   mapInteraction.translateX -=
+//     (containerCenterX - mapInteraction.translateX) * (scaleFactor - 1);
+//   mapInteraction.translateY -=
+//     (containerCenterY - mapInteraction.translateY) * (scaleFactor - 1);
+
+//   // 경계 처리
+//   if (mapInteraction.translateX > elementDeltaMinX) {
+//     mapInteraction.translateX += elementDeltaMinX;
+//   }
+
+//   if (mapInteraction.translateY > elementDeltaMinY) {
+//     mapInteraction.translateY += elementDeltaMinY;
+//   }
+
+//   if (elementDeltaMaxX >= 0) {
+//     mapInteraction.translateX += elementDeltaMaxX;
+//   }
+
+//   if (elementDeltaMaxY >= 0) {
+//     mapInteraction.translateY += elementDeltaMaxY;
+//   }
+
+//   // scale에 따라 transform-origin을 설정
+//   mapGroup.style.transformOrigin = `0px 0px`;
+//   console.log(mapGroup.style.transformOrigin);
+
+//   // 트랜스폼 업데이트
+//   mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
+// }
 export function onWheel(
   event: WheelEvent,
   mapContainer: HTMLDivElement | undefined,
@@ -35,12 +97,17 @@ export function onWheel(
   event.preventDefault(); // 기본 스크롤 방지
 
   const containerRect = mapContainer.getBoundingClientRect();
-  const containerCenterX = containerRect.width / 2;
-  const containerCenterY = containerRect.height / 2;
-
   const mapRect = mapGroup.getBoundingClientRect();
 
-  // 기존 좌표에 대한 스케일 적용
+  // ✅ mapContainer의 중심 좌표
+  const containerCenterX = containerRect.left + containerRect.width / 2;
+  const containerCenterY = containerRect.top + containerRect.height / 2;
+
+  // ✅ mapGroup의 중심 좌표 (현재 기준)
+  const mapCenterX = mapRect.left + mapRect.width / 2;
+  const mapCenterY = mapRect.top + mapRect.height / 2;
+
+  // 기존 스케일 적용
   const prevScale = mapInteraction.scale;
   mapInteraction.scale += event.deltaY * -0.01;
   mapInteraction.scale = Math.min(
@@ -48,38 +115,15 @@ export function onWheel(
     mapInteraction.maxScale,
   ); // 스케일 제한
 
-  // 경계 제한 계산
-  const { elementDeltaMinX, elementDeltaMinY } =
-    mapInteraction.getElementMinDelta(containerRect, mapRect);
-  const { elementDeltaMaxX, elementDeltaMaxY } =
-    mapInteraction.getElementMaxDelta(containerRect, mapRect);
-
-  // 중심 기준 이동 계산
+  // ✅ 스케일 변경 후 중심 보정 (mapContainer 기준)
   const scaleFactor = mapInteraction.scale / prevScale;
   mapInteraction.translateX -=
-    (containerCenterX - mapInteraction.translateX) * (scaleFactor - 1);
+    (containerCenterX - mapCenterX) * (scaleFactor - 1);
   mapInteraction.translateY -=
-    (containerCenterY - mapInteraction.translateY) * (scaleFactor - 1);
+    (containerCenterY - mapCenterY) * (scaleFactor - 1);
 
-  // 경계 처리
-  if (mapInteraction.translateX > elementDeltaMinX) {
-    mapInteraction.translateX += elementDeltaMinX;
-  }
-
-  if (mapInteraction.translateY > elementDeltaMinY) {
-    mapInteraction.translateY += elementDeltaMinY;
-  }
-
-  if (elementDeltaMaxX >= 0) {
-    mapInteraction.translateX += elementDeltaMaxX;
-  }
-
-  if (elementDeltaMaxY >= 0) {
-    mapInteraction.translateY += elementDeltaMaxY;
-  }
-
-  // scale에 따라 transform-origin을 설정
-  mapGroup.style.transformOrigin = `0px 0px`;
+  // ✅ transform-origin을 "center center"로 설정
+  mapGroup.style.transformOrigin = "center center";
 
   // 트랜스폼 업데이트
   mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;

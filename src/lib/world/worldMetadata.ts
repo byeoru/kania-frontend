@@ -12,9 +12,12 @@ import type {
 } from "../../dataTypes/packCellsType";
 import type { GridCellsType } from "../../dataTypes/gridCellsType";
 import {
+  Assets,
   BlurFilter,
   Container,
   Graphics,
+  Texture,
+  TextureSource,
   type ContainerChild,
   type PointData,
 } from "pixi.js";
@@ -48,6 +51,7 @@ export const worldMetadata = {
   tempProvinceFillGraphics: new Graphics(), // 선택한 주 색칠용 그래픽 객체
   tempSectorFillGraphics: new Graphics(), // 선택한 셀 색칠용 그래픽 객체
   realmGraphicsMap: new Map<SectorIdType, Graphics>(), // 영토 색칠용 그래픽 객체 Map
+  mapTexture: null as Texture<TextureSource<any>> | null,
 
   async loadMetadata() {
     this.pack = (await json("assets/data/pack.json")) ?? null;
@@ -341,8 +345,17 @@ export const worldMetadata = {
       }
     }
 
-    graphics.stroke({ color, width: 4, alignment: 1, cap: "round" });
-    graphics.fill({ color, alpha: 0.1 });
+    const borderTexture = Texture.from("/assets/img/texture12.png");
+    const innerTexture = Texture.from("/assets/img/texture8.png");
+
+    graphics.fill({ color, alpha: 0.4, texture: innerTexture });
+    graphics.stroke({
+      color,
+      width: 4,
+      alignment: 1,
+      cap: "round",
+      texture: borderTexture,
+    });
     this.mapLayerStage!.addChild(graphics);
   },
 

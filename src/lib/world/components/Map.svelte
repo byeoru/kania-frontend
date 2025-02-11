@@ -8,7 +8,7 @@
   } from "../eventHandler";
   import { mapInteraction } from "../mapInteraction";
   import Loading from "../../Loading.svelte";
-  import { Application, Graphics } from "pixi.js";
+  import { Application, Assets, Graphics, Texture } from "pixi.js";
   import type {
     ActionType,
     CurrentCellInfoType,
@@ -159,6 +159,13 @@
       backgroundAlpha: 0,
     });
     worldMetadata.mapLayerStage = app.stage;
+    // map texture
+    await Assets.load("/assets/img/texture8.png");
+    await Assets.load("/assets/img/texture12.png");
+    await Assets.load("/assets/img/texture10.png");
+
+    // console.log(textureAsset);
+    // const texture = Texture.from(textureAsset);
   }
 
   async function callApiForDrawRealm(svgLayer: SVGSVGElement): Promise<number> {
@@ -268,7 +275,7 @@
     });
   };
 
-  async function callApiForDrawLevies(svgLayer: SVGSVGElement) {
+  async function callApiForDrawLevies() {
     const res = await realmMemberApi.getOurRealmLevies();
     switch (res.status) {
       case HttpStatusCode.Ok:
@@ -334,7 +341,7 @@
   async function mapLayerDataInit(svgLayer: SVGSVGElement) {
     const myRealmIdCount = await callApiForDrawRealm(svgLayer);
     if (myRealmIdCount > 0) {
-      await callApiForDrawLevies(svgLayer);
+      await callApiForDrawLevies();
     }
   }
 </script>
