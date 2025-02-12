@@ -45,8 +45,8 @@ export const mapInteraction = {
       this.translateY += Math.max(dragDeltaY, elementDeltaMaxY * this.scale);
     }
   },
-  updateStartXY(event: MouseEvent) {
-    this.startX = event.clientX;
-    this.startY = event.clientY;
+  updateStartXY(event: MouseEvent, container: HTMLElement) {
+    this.startX = event.pageX - container.scrollLeft;
+    this.startY = event.pageY - container.scrollTop;
   },
 };

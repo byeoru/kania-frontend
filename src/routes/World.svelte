@@ -90,15 +90,16 @@
     width: 100%;
     height: 100vh;
     display: flex;
-    z-index: 6;
+    z-index: 7;
     position: relative;
   }
 
   .map_container {
     flex: 1;
     height: 100vh;
-    overflow: hidden;
+    overflow: scroll;
     position: relative;
-    z-index: 4;
+    scrollbar-width: none;
+    z-index: 5;
   }
 </style>

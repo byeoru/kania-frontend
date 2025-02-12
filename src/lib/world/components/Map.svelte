@@ -8,7 +8,7 @@
   } from "../eventHandler";
   import { mapInteraction } from "../mapInteraction";
   import Loading from "../../Loading.svelte";
-  import { Application, Assets, Graphics, Texture } from "pixi.js";
+  import { Application, Assets, Graphics } from "pixi.js";
   import type {
     ActionType,
     CurrentCellInfoType,
@@ -49,6 +49,7 @@
   } = $props();
 
   let mapLayerCanvas = $state<HTMLCanvasElement>();
+  let mapDecoCanvas = $state<HTMLCanvasElement>();
 
   // map(svg) 조정, handler setting
   $effect(() => {
@@ -372,8 +373,9 @@
         getMapInteractionMode(),
       )}
     onwheel={(event) => onWheel(event, mapContainer, mapGroup)}
-    onmousedown={onMouseDown}
+    onmousedown={(event) => onMouseDown(event, mapContainer)}
   >
+    <canvas id="map-deco-canvas" bind:this={mapDecoCanvas}></canvas>
     <svg
       id="map-layer-svg"
       bind:this={layerNode}
@@ -408,13 +410,17 @@
   #map-group {
     width: 7680px;
     height: 4320px;
-    z-index: 4;
+    z-index: 5;
   }
   #map-layer-svg {
     position: absolute;
-    z-index: 3;
+    z-index: 4;
   }
   #map-layer-canvas {
+    z-index: 3;
+    position: absolute;
+  }
+  #map-deco-canvas {
     z-index: 2;
     position: absolute;
   }
