@@ -16,7 +16,8 @@
 
   $effect(() => {
     if (!cellInfo) return;
-    levies = ourSectorLeviesStored.get(cellInfo.i)?.values().toArray() ?? [];
+    const l = ourSectorLeviesStored.get(cellInfo.i);
+    levies = l ? [...l.values()] : [];
   });
 </script>
 
@@ -38,7 +39,7 @@
     position: absolute;
     top: 10em;
     left: 0em;
-    z-index: 5;
+    z-index: 6;
     margin-left: 0.1em;
   }
 

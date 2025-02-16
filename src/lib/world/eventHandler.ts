@@ -53,6 +53,7 @@ export function onWheel(
 
   // ✅ 줌 비율 계산
   const scaleFactor = mapInteraction.scale / prevScale;
+  mapInteraction.scaleFactor = scaleFactor;
 
   // ✅ 스크롤 위치 보정 (줌 후에도 중심 유지)
   const newScrollLeft = centerX * scaleFactor - containerRect.width / 2;
@@ -69,34 +70,43 @@ export function onWheel(
 export async function onClick(
   event: MouseEvent,
   map: SVGSVGElement | undefined,
+  mapGroup: HTMLDivElement | undefined,
   svgLayer: SVGSVGElement | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
   latestCellInfo: CurrentCellInfoType | undefined,
   gameModeType: GameModeType,
 ) {
-  if (!map || !svgLayer) {
+  if (!map || !svgLayer || !mapGroup) {
     return;
   }
 
   switch (gameModeType) {
     case "NORMAL":
-      await clickNormal(event, map, latestCellInfo, updateCellInfoFn);
+      await clickNormal(event, map, mapGroup, latestCellInfo, updateCellInfoFn);
       break;
     case "CELL_SELECTION":
-      clickCellSection(event, map, svgLayer, latestCellInfo, updateCellInfoFn);
+      clickCellSection(
+        event,
+        map,
+        mapGroup,
+        svgLayer,
+        latestCellInfo,
+        updateCellInfoFn,
+      );
       break;
     case "ATTACK":
-      clickAttack(event, map, svgLayer);
+      clickAttack(event, mapGroup, map, svgLayer);
       break;
   }
 }
 
 function clickAttack(
   event: MouseEvent,
+  mapGroup: HTMLDivElement,
   map: SVGSVGElement,
   svgLayer: SVGSVGElement,
 ) {
-  const { x, y } = getLocalSvgCoordinates(event, map);
+  const { x, y } = getLocalSvgCoordinates(event, map, mapGroup);
   const targetSector = worldMetadata.findCell(x, y); // pack cell id
 
   if (!targetSector) {
@@ -134,12 +144,13 @@ function clickAttack(
 function clickCellSection(
   event: MouseEvent,
   map: SVGSVGElement,
+  mapGroup: HTMLDivElement,
   svgLayer: SVGSVGElement,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
   worldMetadata.removeProvinceCells();
-  const { x, y } = getLocalSvgCoordinates(event, map);
+  const { x, y } = getLocalSvgCoordinates(event, map, mapGroup);
   const i = worldMetadata.findCell(x, y); // pack cell id
   if (!i) {
     return;
@@ -182,10 +193,11 @@ function clickCellSection(
 async function clickNormal(
   event: MouseEvent,
   map: SVGSVGElement,
+  mapGroup: HTMLDivElement,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
 ) {
-  const { x, y } = getLocalSvgCoordinates(event, map);
+  const { x, y } = getLocalSvgCoordinates(event, map, mapGroup);
   const i = worldMetadata.findCell(x, y); // pack cell id
   if (!i) {
     return;
@@ -312,38 +324,9 @@ export function onMouseMove(
   if (!mapContainer || !mapGroup || !mapInteraction.isDragging) {
     return;
   }
-
-  const containerRect = mapContainer.getBoundingClientRect();
-  const mapRect = mapGroup.getBoundingClientRect();
-
-  // 이동 거리 계산
-  // const { dragDeltaX, dragDeltaY } = mapInteraction.getMouseDragDelta(event);
-
-  // 경계 제한 계산
-  // const { elementDeltaMinX, elementDeltaMinY } =
-  //   mapInteraction.getElementMinDelta(containerRect, mapRect);
-  // const { elementDeltaMaxX, elementDeltaMaxY } =
-  //   mapInteraction.getElementMaxDelta(containerRect, mapRect);
-
-  // mouse drag X, Y 수치 적용
-  // mapInteraction.updateMapTranslate(
-  //   dragDeltaX,
-  //   dragDeltaY,
-  //   elementDeltaMinX,
-  //   elementDeltaMinY,
-  //   elementDeltaMaxX,
-  //   elementDeltaMaxY,
-  // );
-
-  // 시작 위치 갱신
-  // console.log(dragDeltaX, dragDeltaY);
-  // 이동 적용
-  // mapGroup.style.transform = `translate(${mapInteraction.translateX}px, ${mapInteraction.translateY}px) scale(${mapInteraction.scale})`;
   const x = event.pageX - mapInteraction.startX;
   const y = event.pageY - mapInteraction.startY;
   mapContainer.scrollTo(x, y);
-  console.log(mapGroup.scrollLeft, mapGroup.scrollTop);
-  // mapInteraction.updateStartXY(event);
 }
 
 export function onMouseUp(map: SVGSVGElement | undefined) {
@@ -360,15 +343,21 @@ export function onMouseLeave() {
 export function onMouseMoveMetadata(
   event: MouseEvent,
   map: SVGSVGElement | undefined,
+  mapGroup: HTMLDivElement | undefined,
   latestCellInfo: CurrentCellInfoType | undefined,
   updateCellInfoFn: (newInfo: CurrentCellInfoType) => void,
   gameModeType: GameModeType,
 ) {
-  if (!map || !latestCellInfo || gameModeType !== "CELL_SELECTION") {
+  if (
+    !map ||
+    !latestCellInfo ||
+    !mapGroup ||
+    gameModeType !== "CELL_SELECTION"
+  ) {
     return;
   }
 
-  const { x, y } = getLocalSvgCoordinates(event, map);
+  const { x, y } = getLocalSvgCoordinates(event, map, mapGroup);
   const i = worldMetadata.findCell(x, y); // pack cell id
   if (!i) {
     return;

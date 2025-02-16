@@ -3,6 +3,8 @@ import {
   json,
   quadtree,
   select,
+  text,
+  xml,
   type BaseType,
   type Selection,
 } from "d3";
@@ -12,18 +14,19 @@ import type {
 } from "../../dataTypes/packCellsType";
 import type { GridCellsType } from "../../dataTypes/gridCellsType";
 import {
-  Assets,
+  Application,
   BlurFilter,
   Container,
   Graphics,
+  Sprite,
   Texture,
   TextureSource,
   type ContainerChild,
   type PointData,
+  type Renderer,
 } from "pixi.js";
 import {
   isMyRealmId,
-  isMySector,
   ourRealmLevyActionsStored,
   ourSectorLeviesStored,
   realmInfoMapStored,
@@ -36,13 +39,16 @@ import { levyApi } from "./api/levy";
 import { HttpStatusCode } from "axios";
 import type { LevyActionResponseType } from "../../model/levy_action";
 import type { ActionType, LeviesStoredType } from "../../dataTypes/aboutUiType";
-import { actionRoadColor } from "../../constant";
+import { actionRoadColor, oceanPattern } from "../../constant";
+import parse from "parse-svg-path";
+import { DropShadowFilter } from "pixi-filters";
 
 export const worldMetadata = {
   pack: {} as PackCellsType | null,
   grid: {} as GridCellsType | null,
   mapWidth: 7680,
   mapHeight: 4320,
+  pixiApp: null as Application<Renderer> | null,
   provinceCells: new Map<number, number[]>(),
   realmCells: new Map<number, Set<number>>(),
   mapLayerStage: null as Container<ContainerChild> | null,
@@ -62,6 +68,119 @@ export const worldMetadata = {
     this.pack!.cells.cells.q = quadtree(
       this.pack!.cells.cells.p.map(([x, y], i) => [x, y, i]),
     );
+  },
+
+  async drawLand() {
+    const landString = await text("assets/map/land.svg");
+    const landGraphics = new Graphics().svg(landString);
+    this.mapLayerStage!.addChild(landGraphics);
+  },
+
+  async drawLake() {
+    const lakeString = await text("assets/map/lake.svg");
+    const lakeGraphics = new Graphics().svg(lakeString);
+    this.mapLayerStage!.addChild(lakeGraphics);
+  },
+
+  async drawCoastline() {
+    await xml("assets/map/coastline.svg").then((xml) => {
+      const coastlineGraphics = new Graphics();
+      coastlineGraphics.rect(
+        0,
+        0,
+        worldMetadata.mapWidth,
+        worldMetadata.mapHeight,
+      );
+      const svgElement = xml.documentElement;
+      select(svgElement)
+        .select("#sea_island")
+        .selectAll("path")
+        .each(function () {
+          const pathData = select(this).attr("d");
+          const parsedCommands = parse(pathData);
+          parsedCommands.forEach((cmd) => {
+            switch (cmd[0]) {
+              case "M":
+                coastlineGraphics.moveTo(cmd[1], cmd[2]);
+                break;
+              case "C":
+                coastlineGraphics.bezierCurveTo(
+                  cmd[1],
+                  cmd[2],
+                  cmd[3],
+                  cmd[4],
+                  cmd[5],
+                  cmd[6],
+                );
+                break;
+              case "L":
+                coastlineGraphics.lineTo(cmd[1], cmd[2]);
+                break;
+              case "Z":
+                coastlineGraphics.closePath();
+                break;
+            }
+          });
+        });
+
+      const shadowFilter = new DropShadowFilter({
+        alpha: 1,
+      });
+      coastlineGraphics.filters = [shadowFilter];
+
+      coastlineGraphics.stroke({
+        color: "#1f3846",
+        alpha: 0.5,
+        pixelLine: true,
+      });
+      this.mapLayerStage!.addChild(coastlineGraphics);
+
+      // RenderTexture 생성 (필터가 적용된 상태 저장)
+      const renderTexture =
+        this.pixiApp!.renderer.generateTexture(coastlineGraphics);
+
+      // RenderTexture를 Sprite로 변환
+      const sprite = new Sprite(renderTexture);
+      sprite.x = coastlineGraphics.x;
+      sprite.y = coastlineGraphics.y;
+      // sprite 캐시 저장
+      sprite.cacheAsTexture(true);
+
+      // 필터가 적용된 이후 Graphics는 삭제
+      coastlineGraphics.destroy();
+
+      // 최적화된 Sprite 추가
+      this.mapLayerStage!.addChild(sprite);
+    });
+  },
+
+  async drawLakeIsland() {
+    const lakeIslandString = await text("assets/map/lake_island.svg");
+    const lakeIslandGraphics = new Graphics().svg(lakeIslandString);
+    this.mapLayerStage!.addChild(lakeIslandGraphics);
+  },
+
+  fillOceanTexture() {
+    const oceanGraphics = new Graphics();
+    const oceanTexture = Texture.from(oceanPattern);
+    oceanGraphics.rect(0, 0, worldMetadata.mapWidth, worldMetadata.mapHeight);
+    oceanGraphics.fill({ texture: oceanTexture, alpha: 0.4 });
+
+    // RenderTexture 생성 (필터가 적용된 상태 저장)
+    const renderTexture = this.pixiApp!.renderer.generateTexture(oceanGraphics);
+
+    // RenderTexture를 Sprite로 변환
+    const sprite = new Sprite(renderTexture);
+    sprite.x = oceanGraphics.x;
+    sprite.y = oceanGraphics.y;
+    // sprite 캐시 저장
+    sprite.cacheAsTexture(true);
+
+    // 필터가 적용된 이후 Graphics는 삭제
+    oceanGraphics.destroy();
+
+    // 최적화된 Sprite 추가
+    this.mapLayerStage!.addChild(sprite);
   },
 
   findCell(x: number, y: number, radius = Infinity) {
@@ -317,7 +436,7 @@ export const worldMetadata = {
       }
     }
 
-    let keys = lineMap.keys().toArray();
+    let keys = [...lineMap.keys()];
     let vKey = keys[0];
     let initKey = vKey;
     const splitedInitKey = initKey.split(" ");
@@ -332,7 +451,7 @@ export const worldMetadata = {
         if (lineMap.size <= 0) {
           break;
         }
-        keys = lineMap.keys().toArray();
+        keys = [...lineMap.keys()];
         vKey = keys[0];
         initKey = vKey;
         const newSplitedInitKey = initKey.split(" ");
@@ -419,7 +538,7 @@ export const worldMetadata = {
     this.removeRealm(body.new_realm_id);
     this.fillRealm(
       body.new_realm_id,
-      realmCells.keys().toArray(),
+      [...realmCells.keys()],
       newOwnerColor!.color,
     );
 

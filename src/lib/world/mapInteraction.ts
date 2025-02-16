@@ -2,6 +2,7 @@ export const mapInteraction = {
   minScale: 0.3, // 최소 배율
   maxScale: 1.3, // 최대 배율
   scale: 1, // 확대/축소 배율
+  scaleFactor: 0,
   translateY: 0, // Y축 이동
   translateX: 0, // X축 이동
   isDragging: false, // 드래그 중인지 여부

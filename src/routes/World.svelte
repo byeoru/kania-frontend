@@ -90,7 +90,7 @@
     width: 100%;
     height: 100vh;
     display: flex;
-    z-index: 7;
+    z-index: 6;
     position: relative;
   }
 
@@ -100,6 +100,6 @@
     overflow: scroll;
     position: relative;
     scrollbar-width: none;
-    z-index: 5;
+    z-index: 4;
   }
 </style>

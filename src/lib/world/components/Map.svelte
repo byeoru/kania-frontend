@@ -6,7 +6,6 @@
     onMouseMoveMetadata,
     onWheel,
   } from "../eventHandler";
-  import { mapInteraction } from "../mapInteraction";
   import Loading from "../../Loading.svelte";
   import { Application, Assets, Graphics } from "pixi.js";
   import type {
@@ -31,6 +30,7 @@
   } from "../../shared.svelte";
   import { select, xml } from "d3";
   import { realmMemberApi } from "../api/realm_member";
+  import { oceanPattern } from "../../../constant";
 
   let {
     mapContainer,
@@ -49,7 +49,6 @@
   } = $props();
 
   let mapLayerCanvas = $state<HTMLCanvasElement>();
-  let mapDecoCanvas = $state<HTMLCanvasElement>();
 
   // map(svg) 조정, handler setting
   $effect(() => {
@@ -59,26 +58,27 @@
 
     worldMetadata.prepareCellsBorder();
 
-    // 초기 map scale value setting
-    const containerRect = mapContainer.getBoundingClientRect();
-    const mapRect = mapNode.getBoundingClientRect();
+    // // 초기 map scale value setting
+    // const containerRect = mapContainer.getBoundingClientRect();
+    // const mapRect = mapNode.getBoundingClientRect();
 
-    const { elementDeltaMaxX, elementDeltaMaxY } =
-      mapInteraction.getElementMaxDelta(containerRect, mapRect);
+    // const { elementDeltaMaxX, elementDeltaMaxY } =
+    //   mapInteraction.getElementMaxDelta(containerRect, mapRect);
 
-    // map이 container 보다 작을 경우
-    if (elementDeltaMaxX > 0 || elementDeltaMaxY > 0) {
-      // 새로 조정할 스케일 계산 (너비와 높이를 각각 비교)
-      const widthScale = containerRect.width / mapRect.width;
-      const heightScale = containerRect.height / mapRect.height;
+    // // map이 container 보다 작을 경우
+    // if (elementDeltaMaxX > 0 || elementDeltaMaxY > 0) {
+    //   // 새로 조정할 스케일 계산 (너비와 높이를 각각 비교)
+    //   const widthScale = containerRect.width / mapRect.width;
+    //   const heightScale = containerRect.height / mapRect.height;
 
-      // 최종 스케일로 업데이트 (너비와 높이 중 큰 쪽을 선택) + 여유 scale 추가
-      mapInteraction.minScale = Math.max(widthScale, heightScale) + 0.05;
-      mapInteraction.scale = mapInteraction.minScale;
+    //   // 최종 스케일로 업데이트 (너비와 높이 중 큰 쪽을 선택) + 여유 scale 추가
+    //   mapInteraction.minScale = Math.max(widthScale, heightScale) + 0.05;
+    //   mapInteraction.scale = mapInteraction.minScale;
 
-      // 배율 적용
-      mapNode.style.transform = `scale(${mapInteraction.minScale})`;
-    }
+    //   // 배율 적용
+    //   // mapNode.style.transform = `scale(${mapInteraction.minScale})`;
+    //   map
+    // }
   });
 
   // map layer(svg, canvas) init
@@ -159,14 +159,13 @@
       antialias: true, // 안티에일리어싱 활성화
       backgroundAlpha: 0,
     });
+    worldMetadata.pixiApp = app;
     worldMetadata.mapLayerStage = app.stage;
     // map texture
     await Assets.load("/assets/img/texture8.png");
     await Assets.load("/assets/img/texture12.png");
     await Assets.load("/assets/img/texture10.png");
-
-    // console.log(textureAsset);
-    // const texture = Texture.from(textureAsset);
+    await Assets.load(oceanPattern);
   }
 
   async function callApiForDrawRealm(svgLayer: SVGSVGElement): Promise<number> {
@@ -249,7 +248,7 @@
 
   const drawActions = () => {
     const actions = ourRealmLevyActionsStored.values();
-    actions.forEach((action) => {
+    for (const action of actions) {
       const type = action.action_type as ActionType;
       worldMetadata.drawActionRoad(
         action.levy_action_id,
@@ -273,7 +272,7 @@
           );
           break;
       }
-    });
+    }
   };
 
   async function callApiForDrawLevies() {
@@ -299,10 +298,16 @@
     await pixiInit(canvasLayer);
     // layer svg element init
     mapLayerSVGInit(mapLayerSVG);
+    // draw terrain
+    worldMetadata.fillOceanTexture();
+    await worldMetadata.drawCoastline();
+    await worldMetadata.drawLand();
+    await worldMetadata.drawLake();
+    await worldMetadata.drawLakeIsland();
     // data fetch and draw(svg, canvas)
     await mapLayerDataInit(mapLayerSVG);
     // ws 연결
-    initWebSocketClient("ws://localhost:8081");
+    initWebSocketClient("ws://localhost:8443");
   }
 
   function mapLayerSVGInit(mapLayerSVG: SVGSVGElement) {
@@ -359,6 +364,7 @@
       onClick(
         event,
         mapNode,
+        mapGroup,
         layerNode,
         updateCellInfoFn,
         currentCellInfo,
@@ -368,6 +374,7 @@
       onMouseMoveMetadata(
         event,
         mapNode,
+        mapGroup,
         currentCellInfo,
         updateCellInfoFn,
         getMapInteractionMode(),
@@ -375,7 +382,6 @@
     onwheel={(event) => onWheel(event, mapContainer, mapGroup)}
     onmousedown={(event) => onMouseDown(event, mapContainer)}
   >
-    <canvas id="map-deco-canvas" bind:this={mapDecoCanvas}></canvas>
     <svg
       id="map-layer-svg"
       bind:this={layerNode}
@@ -410,17 +416,13 @@
   #map-group {
     width: 7680px;
     height: 4320px;
-    z-index: 5;
+    z-index: 4;
   }
   #map-layer-svg {
     position: absolute;
-    z-index: 4;
+    z-index: 3;
   }
   #map-layer-canvas {
-    z-index: 3;
-    position: absolute;
-  }
-  #map-deco-canvas {
     z-index: 2;
     position: absolute;
   }

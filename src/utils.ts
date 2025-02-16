@@ -9,14 +9,33 @@ import {
 } from "./lib/shared.svelte";
 import { worldMetadata } from "./lib/world/worldMetadata";
 import type { FeatureClass } from "./dataTypes/packCellsType";
+import { mapInteraction } from "./lib/world/mapInteraction";
 
 // SVG local 좌표 변환 함수
-export function getLocalSvgCoordinates(event: MouseEvent, svg: SVGSVGElement) {
+export function getLocalSvgCoordinates(
+  event: MouseEvent,
+  svg: SVGSVGElement,
+  container: HTMLDivElement,
+) {
   const point = svg.createSVGPoint();
-  point.x = event.clientX;
-  point.y = event.clientY;
 
-  // 화면 좌표를 SVG 좌표로 변환
+  // 🛠 Safari에서는 zoom에 따른 보정 필요
+  const zoomFactor = mapInteraction.scale;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+  let x = event.clientX + container.scrollLeft;
+  let y = event.clientY + container.scrollTop;
+
+  // Safari에서는 zoom 보정 적용
+  if (isSafari) {
+    console.log(isSafari);
+    x /= zoomFactor;
+    y /= zoomFactor;
+  }
+
+  point.x = x;
+  point.y = y;
+
   const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
   return svgPoint;
 }
